@@ -84,10 +84,6 @@ The same data model was also built in Power BI: a star schema of seven tables wi
 | Unbilled backlog | Estimated value of completed work requests not yet invoiced |
 | Refund turnaround | Approval date minus refund request date |
 
-## Tech stack
-
-Python, pandas, Streamlit, Plotly, Ollama (qwen2.5:3b), Power BI and DAX.
-
 ## Author
 
-Vivek Kumar, Computer Science (Co-op) student at Algoma University. [LinkedIn](https://linkedin.com/in/vivek-kumar) · [Portfolio](https://vivekkumarportfolio.vercel.app)
+Vivek Kumar, Computer Science (Co-op) student at Algoma University. [LinkedIn](https://www.linkedin.com/in/vivek-kumar-812211247) · [Portfolio](https://vivekkumarportfolio.vercel.app)
