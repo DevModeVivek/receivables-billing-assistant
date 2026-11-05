@@ -17,15 +17,17 @@ st.markdown(
     "by hand, typed into a tracker and then into the billing system, and chased by email when something is "
     "missing. That work is slow, repetitive and easy to get wrong.")
 
-st.subheader("What the data suggests")
 st.markdown(
-    f"- In the synthetic dataset, {rc.SLOW_CATEGORY} takes **{slow[rc.SLOW_CATEGORY]:.0f} days** from completed work "
-    f"to invoice, against about **{others:.0f} days** for other categories.\n"
-    f"- That category also holds the largest overdue balance, **{rc.money(damage_overdue)}**.\n"
-    f"- **{m.over_90 / m.outstanding:.0%}** of the outstanding balance is more than 90 days past due "
-    f"({rc.money(m.over_90)} of {rc.money(m.outstanding)}).\n\n"
-    "A likely cause is that this category needs the most supporting information (incident date, claim number, "
-    "documents), so incomplete requests go back and forth. This should be confirmed with the team before any change.")
+    f"In the synthetic dataset, {rc.SLOW_CATEGORY} takes **{slow[rc.SLOW_CATEGORY]:.0f} days** from completed work "
+    f"to invoice, against about **{others:.0f} days** for other categories, and holds the largest overdue balance, "
+    f"**{rc.money(damage_overdue)}** of {rc.money(m.overdue_amt)}.")
+
+st.subheader("Discovery")
+st.markdown(
+    "Before changing anything, two weeks of observation and data would confirm where the time goes: volume by team, "
+    "category and channel; share of requests complete on arrival and what is usually missing; days from work "
+    "completed to invoice; follow-ups per request; invoices corrected after issue; analyst minutes per request; and "
+    "the team's real required fields, approval limits, rate cards and upload layout.")
 
 st.subheader("Proposed improvement")
 st.markdown(
@@ -53,17 +55,19 @@ st.markdown(
 
 st.subheader("Success measures")
 st.markdown(
-    "| Measure | How it is measured |\n| --- | --- |\n"
-    "| Complete first time | Share of requests with nothing missing on arrival |\n"
-    "| Days to invoice | Work completed to invoice date, for the pilot category |\n"
-    "| Follow-ups per request | Emails needed before a request can be billed |\n"
-    "| Errors caught before the customer | Mismatches found at reconciliation |\n"
-    "| Analyst time per request | Short time study before and during the pilot |\n\n"
+    "| Measure | How it is assessed |\n| --- | --- |\n"
+    "| Processing time | Days from request received, and from work completed, to invoice |\n"
+    "| Completeness | Share of requests with nothing missing on arrival |\n"
+    "| Rework | Follow-up emails per request and days waiting for replies |\n"
+    "| Error rate | Invoices corrected after issue; mismatches caught before the customer sees them |\n"
+    "| Analyst effort | Minutes per request, from a short time study |\n"
+    "| Staff experience | Short survey of analysts and submitting teams at start and end |\n\n"
     "Targets would be set after the baseline is measured. No savings are assumed in advance.")
 
-st.subheader("Assumptions and limits")
+st.subheader("Assumptions")
 st.markdown(
     "- All figures here come from a synthetic dataset, not company data.\n"
+    "- The current process described above is typical of manual billing; the real process may differ.\n"
     "- The approval limit, rate card and rules are illustrative and would follow the team's own policy.\n"
     "- Any AI use would need the organization's approval and approved tools.")
 
