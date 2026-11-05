@@ -54,7 +54,11 @@ section[data-testid="stSidebar"] {background: #F1F5F9; border-right: 1px solid #
 .badge.muted {background: #F1F5F9; color: #475569; border-color: #E2E8F0;}
 .demo-flag {background: #EAF1FA; color: #14365D; border: 1px solid #C9DAF0; border-radius: 6px;
             padding: 6px 10px; font-size: 0.8rem; margin: 0.2rem 0 0.6rem 0;}
-.side-foot {color: #64748B; font-size: 0.75rem; margin-top: 1.2rem; line-height: 1.5;}
+.side-foot {color: #64748B; font-size: 0.78rem; margin-top: 1.2rem; line-height: 1.6;}
+.side-foot a {color: #2F6DB5; text-decoration: none;}
+.note {background: #FFFFFF; border: 1px solid #E2E8F0; border-left: 4px solid #14365D; border-radius: 8px;
+       padding: 16px 20px; color: #1F2937; font-size: 0.98rem; line-height: 1.6; margin: 0.4rem 0 1.1rem 0;}
+.note-sign {color: #64748B; font-size: 0.85rem; margin-top: 8px;}
 .footer {color: #64748B; font-size: 0.76rem; margin-top: 2.5rem; border-top: 1px solid #E2E8F0; padding-top: 0.8rem;}
 div[data-testid="stChatMessage"] {background: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 8px;
                                   padding: 12px 16px; margin-bottom: 0.6rem;}
@@ -164,25 +168,18 @@ def ai_provider():
     return providers.connect()
 
 
-def ai_status() -> str:
-    p = ai_provider()
-    if p is None:
-        return "AI assistant: not configured"
-    return f"AI assistant: {p.name}"
-
-
 # ---------------------------------------------------------------- page furniture
 def sidebar() -> None:
     with st.sidebar:
         st.session_state["_filter_slot"] = st.container()
-        st.markdown("<div class='demo-flag'><b>Demo mode</b> · all data is synthetic</div>", unsafe_allow_html=True)
-        st.radio("Acting as (simulated role)", ROLES, key="role", horizontal=True,
-                 help="A role switch for the demo only. There are no real users or sign-in.")
-        st.button("Reset demo", icon=":material/restart_alt:", width="stretch", on_click=reset_demo,
-                  help="Start again with fresh demo data. Your changes are cleared.")
-        st.caption(ai_status())
-        st.markdown("<div class='side-foot'>Independent portfolio project by Vivek Kumar.<br>"
-                    "Not affiliated with or endorsed by any utility.<br>Version 2.0</div>", unsafe_allow_html=True)
+        st.markdown("<div class='demo-flag'><b>Demo</b> · synthetic data</div>", unsafe_allow_html=True)
+        st.radio("Role (simulated)", ROLES, key="role", horizontal=True,
+                 help="Switch to Supervisor to approve requests. There is no sign-in in this demo.")
+        st.button("Reset demo", icon=":material/restart_alt:", width="stretch", on_click=reset_demo)
+        st.markdown("<div class='side-foot'>Built by Vivek Kumar<br>"
+                    "<a href='https://www.linkedin.com/in/vivek-kumar-812211247' target='_blank'>LinkedIn</a> · "
+                    "<a href='https://github.com/DevModeVivek/receivables-billing-assistant' target='_blank'>GitHub</a>"
+                    "</div>", unsafe_allow_html=True)
 
 
 def header(title: str, subtitle: str, reporting: bool = False) -> None:
@@ -192,15 +189,7 @@ def header(title: str, subtitle: str, reporting: bool = False) -> None:
 
 
 def footer(text: Optional[str] = None) -> None:
-    p = ai_provider()
-    if text is None:
-        if p is None:
-            ai_line = "The AI assistant is not configured in this copy"
-        elif p.hosted:
-            ai_line = f"Assistant questions, which contain only fictional demo data, are sent to {p.name}"
-        else:
-            ai_line = "The assistant runs on a local model, so questions stay on this computer"
-        text = f"All data is synthetic · Figures and checks calculated in Python · {ai_line}"
+    text = text or "Synthetic demo data · Built by Vivek Kumar"
     st.markdown(f"<div class='footer'>{text}</div>", unsafe_allow_html=True)
 
 

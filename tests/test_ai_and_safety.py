@@ -84,8 +84,8 @@ def _gemini_with(models):
 
 
 @pytest.mark.parametrize("exc, phrase", [
-    (RuntimeError("429 RESOURCE_EXHAUSTED quota exceeded for key AIzaSECRET"), "quota"),
-    (RuntimeError("403 PERMISSION_DENIED API key not valid AIzaSECRET"), "not accepted"),
+    (RuntimeError("429 RESOURCE_EXHAUSTED quota exceeded for key AIzaSECRET"), "busy"),
+    (RuntimeError("403 PERMISSION_DENIED API key not valid AIzaSECRET"), "unavailable"),
     (RuntimeError("something odd AIzaSECRET"), "could not answer"),
 ])
 def test_provider_failures_are_reported_honestly(exc, phrase):

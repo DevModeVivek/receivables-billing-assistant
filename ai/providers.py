@@ -47,15 +47,15 @@ def setting(name: str) -> Optional[str]:
 
 
 def _safe_error(exc: Exception, provider: str) -> AIError:
+    """A plain message for the visitor. It never includes the provider's raw error, which could contain a key."""
     text = f"{type(exc).__name__} {exc}".lower()
     if "429" in text or "quota" in text or "rate limit" in text or "resource_exhausted" in text:
-        return AIError(f"The {provider} free quota is used up for the moment. Please try again in a minute; "
-                       "everything else in the app still works.")
+        return AIError("The assistant is busy right now. Please try again in a minute.")
     if "401" in text or "403" in text or "api key" in text or "permission" in text or "unauthenticated" in text:
-        return AIError(f"The {provider} key was not accepted, so the assistant is unavailable.")
+        return AIError("The assistant is unavailable at the moment.")
     if "timeout" in text or "connect" in text:
-        return AIError(f"Could not reach {provider}. Please try again shortly.")
-    return AIError(f"{provider} could not answer this time. Please try again.")
+        return AIError("Could not reach the assistant. Please try again shortly.")
+    return AIError("The assistant could not answer this time. Please try again.")
 
 
 class Provider:

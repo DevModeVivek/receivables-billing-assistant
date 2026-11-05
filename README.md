@@ -34,8 +34,6 @@ Open **Guided Demo** from the home page. It runs three short scenarios on your o
 | Operations | Billing Quality | Billing batch, control total, safe CSV/Excel export, confirmation file and reconciliation |
 | Intelligence | AI Assistant | One assistant over the reports and the live queue, with suggested questions per page |
 | Intelligence | Process Insights | Complete-first-time rate, days to invoice, top problems, results by team, each with its definition |
-| Project | Business Case | A one-page proposal for a small pilot |
-| Project | About | Version history, how AI is used, privacy and limits |
 
 The Version 1 report pages keep their original figures, filters and definitions, fixed at **30 Sep 2026**. Tests check that the figures match the v1.0 code exactly (for example: billed $67.74M, collection rate 78.1%, overdue $10.22M, over 90 days $7.12M).
 
@@ -85,11 +83,7 @@ Python does the work; the AI explains it.
 5. Questions and emails are treated as untrusted text: length limits, prompt-injection screening, a per-visitor question cap, and an answer length limit.
 6. If the AI fails or is not configured, the app says so. It never shows a made-up answer.
 
-| Where it runs | Provider | Notes |
-| --- | --- | --- |
-| Public demo | Google Gemini 3.5 Flash-Lite (free tier) | Questions, with fictional demo summaries, are sent to Google. Free-tier prompts may be used to improve Google's products. Free quotas are limited and change over time. |
-| Optional | Claude (Anthropic API) | Used if an Anthropic key is configured. Paid. |
-| On a laptop | Ollama, `qwen2.5:3b` | Runs locally, so questions stay on the computer. |
+The live demo uses a hosted AI model on a free tier, so questions (with fictional demo data only) are processed by that service and usage is limited. Run locally, the assistant can use [Ollama](https://ollama.com) instead, so nothing leaves the computer.
 
 ## Run it locally
 
@@ -105,7 +99,7 @@ streamlit run app.py
 Everything works without AI. For the assistant, either:
 
 - install [Ollama](https://ollama.com) and run `ollama pull qwen2.5:3b`, or
-- copy `.streamlit/secrets.toml.example` to `.streamlit/secrets.toml` and add a Gemini or Anthropic key. This file is never committed. The hosted SDKs need Python 3.11+ (Gemini) or 3.10+ (Claude).
+- copy `.streamlit/secrets.toml.example` to `.streamlit/secrets.toml` and add an API key for a supported hosted model (see the example file). This file is never committed. Hosted models need Python 3.11 or newer.
 
 Run the tests with `pip install pytest` and then `python -m pytest`.
 
@@ -129,7 +123,7 @@ workflow/extract.py     Email reading: template parser, AI for free text, check 
 workflow/scenarios.py   Guided demo scenarios A, B and C
 workflow/sample_data.py Synthetic workflow history, built on the Version 1 customer list
 workflow/exports.py     Safe CSV/Excel export and upload limits
-ai/providers.py         Gemini, Claude and Ollama behind one interface, with honest errors
+ai/providers.py         Hosted and local AI models behind one interface, with honest errors
 ai/context.py           The assistant's rules and verified context
 ai/guard.py             Input, output and rate limits, prompt-injection screening
 views/                  One file per page

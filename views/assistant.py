@@ -15,23 +15,12 @@ customers = ui.customers()
 page_from = st.session_state.get("assistant_from")
 provider = ui.ai_provider()
 
-ui.header("AI assistant", "Ask about receivables or the billing queue in plain English")
+ui.header("AI assistant", "Ask about receivables or the request queue. Answers use only the app's calculated "
+                          "figures.")
 
 if provider is None:
-    st.warning("The AI assistant is not configured in this copy of the app, so it cannot answer questions. "
-               "Every report, check and workflow step still works. To turn it on, add an API key in the app's "
-               "secret settings (see the README).", icon=":material/info:")
-elif provider.hosted:
-    st.info(f"Questions are answered by {provider.name}, a hosted AI service. Each question is sent with the "
-            "calculated summaries shown below, which contain only fictional demo data. Please do not type real "
-            "personal or company information.", icon=":material/cloud:")
-else:
-    st.info(f"Questions are answered by a local model ({provider.name}), so they stay on this computer.",
-            icon=":material/computer:")
-
-st.markdown("<div class='panel-note'>Python calculates every figure first. The assistant only explains them, cannot "
-            "change anything, and says when the data does not answer the question. Reports use the 30 Sep 2026 "
-            "snapshot and your current filters.</div>", unsafe_allow_html=True)
+    st.info("The assistant is offline right now. Every report and workflow step still works.",
+            icon=":material/info:")
 
 st.session_state.setdefault("chat", [])
 pending = st.session_state.pop("assistant_pending", None)
@@ -39,7 +28,7 @@ question = st.chat_input("Ask about billing, collections or the request queue", 
                          max_chars=guard.MAX_QUESTION_CHARS) or pending
 
 if not st.session_state["chat"] and not question:
-    st.markdown("**Suggested questions**" + (f" (from {page_from})" if page_from else ""))
+    st.markdown("**Try asking**")
     cols = st.columns(2)
     for i, q in enumerate(ai_context.suggestions(page_from, conn)):
         cols[i % 2].button(q, key=f"sugg{i}", width="stretch", disabled=provider is None,
@@ -80,13 +69,12 @@ if question and provider is not None:
                 st.error(ui.esc(e), icon=":material/error:")
 
 if provider is not None:
-    st.caption(f"{guard.questions_left(st.session_state)} questions left in this visit. "
-               "Answers can be wrong: check the figures on the report pages before using them.")
+    st.caption("AI-generated and can be wrong; check figures on the report pages. Questions are processed by a hosted "
+               "AI service, so please use demo questions only.")
 if st.session_state["chat"] and st.button("New conversation", icon=":material/add_comment:"):
     st.session_state["chat"] = []
     st.rerun()
 
-with st.expander("What the assistant was given"):
-    st.caption("The assistant sees only these calculated summaries and rules, never raw records or keys.")
+with st.expander("Data behind the answers"):
     st.text(system)
 ui.footer()

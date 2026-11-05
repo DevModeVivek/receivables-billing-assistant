@@ -178,11 +178,10 @@ with st.container(border=True):
             st.markdown("**3. Ask the assistant to explain**")
             provider = ui.ai_provider()
             if demo.get("c_explained"):
-                st.caption(f"Answer from {provider.name if provider else 'the AI assistant'}, based only on the app's "
-                           "calculated figures")
+                st.caption("AI explanation, based only on the app's calculated figures")
                 st.markdown(ui.esc(demo["c_explained"]))
             elif provider is None:
-                st.caption("The AI assistant is not configured in this copy, so here is the rule-based explanation:")
+                st.caption("Explanation from the reconciliation rule:")
                 st.markdown(ui.esc(
                     f"The billing system invoiced {res['target']} for ${res['invoiced']:,.2f}, but the request was "
                     f"for ${res['requested']:,.2f}. The two amounts use the same digits in a different order, which "
@@ -198,7 +197,7 @@ with st.container(border=True):
                     system = ai_context.system_prompt(ui.metrics(), conn, customers, ui.now(), "Billing Quality")
                     try:
                         with st.container(border=True):
-                            st.caption(f"Answer from {provider.name}, based only on the app's calculated figures")
+                            st.caption("AI explanation, based only on the app's calculated figures")
                             text = st.write_stream(guard.limit_stream(
                                 provider.stream(system, [{"role": "user", "content": q}])))
                         demo["c_explained"] = text if isinstance(text, str) else "".join(map(str, text))

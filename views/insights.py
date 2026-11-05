@@ -12,8 +12,7 @@ checks = store.table(conn, "SELECT * FROM checks_log WHERE run_no = 1")
 events = store.table(conn, "SELECT * FROM events")
 
 ui.header("Process insights", "How the billing request process is performing in the demo workspace")
-st.caption("These figures come from simulated demo requests. They show how each measure would work in a pilot; "
-           "they are not real results and no savings are claimed.")
+st.caption("Simulated demo requests. These show how each measure would be tracked in a pilot, not real results.")
 
 first = reqs[reqs["first_pass_clean"].notna()]
 billed = reqs[reqs["status"] == "Billed"]

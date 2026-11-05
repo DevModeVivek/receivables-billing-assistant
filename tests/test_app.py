@@ -12,7 +12,7 @@ from ai import providers  # noqa: E402
 APP = str(Path(__file__).resolve().parents[1] / "app.py")
 PAGES = ["views/home.py", "views/guided_demo.py", "views/overview.py", "views/billing_ops.py",
          "views/collections.py", "views/intake.py", "views/tracker.py", "views/quality.py", "views/assistant.py",
-         "views/insights.py", "views/business_case.py", "views/about.py"]
+         "views/insights.py"]
 
 
 @pytest.fixture(autouse=True)
@@ -45,7 +45,7 @@ def test_every_page_loads_without_ai():
         assert not at.exception, (page, [e.value for e in at.exception])
     at.switch_page("views/assistant.py")
     at.run()
-    assert any("not configured" in w.value for w in at.warning)
+    assert any("offline" in i.value for i in at.info)
 
 
 def test_filters_change_the_reports_and_persist_across_pages():
