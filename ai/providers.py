@@ -24,7 +24,7 @@ import os
 import re
 from typing import Dict, Iterator, List, Optional
 
-DEFAULT_GEMINI_MODEL = "gemini-3.5-flash"
+DEFAULT_GEMINI_MODEL = "gemini-3.5-flash-lite"  # stable; set GEMINI_MODEL = "gemini-3.8-flash" for the larger model
 DEFAULT_CLAUDE_MODEL = "claude-opus-5-5"
 DEFAULT_OLLAMA_MODEL = "qwen2.5:3b"
 MAX_OUTPUT_TOKENS = 1500

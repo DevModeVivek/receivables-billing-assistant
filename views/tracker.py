@@ -37,15 +37,17 @@ event = st.dataframe(table, hide_index=True, width="stretch", height=360, on_sel
                      column_config={"Amount": st.column_config.NumberColumn(format="dollar")}, key="t_table")
 picked = event.selection.rows if event and event.selection else []
 options = view["request_id"].tolist()
-default = options[picked[0]] if picked else st.session_state.get("t_pick")
-rid = st.selectbox("Open a request (or click a row above)", [""] + options,
-                   index=(options.index(default) + 1) if default in options else 0, key="t_open")
+if picked and picked[0] < len(options) and options[picked[0]] != st.session_state.get("t_last_row"):
+    st.session_state["t_last_row"] = options[picked[0]]
+    st.session_state["t_open"] = options[picked[0]]  # a clicked row opens that request
+if st.session_state.get("t_open") not in [""] + options:
+    st.session_state["t_open"] = ""
+rid = st.selectbox("Open a request (or click a row above)", [""] + options, key="t_open")
 if not rid:
     st.caption("Select a request to see its checks, actions and history.")
     ui.ask_assistant("Workflow Tracker")
     ui.footer()
     st.stop()
-st.session_state["t_pick"] = rid
 
 req = store.get_request(conn, rid)
 findings = store.findings_for(conn, req, customers, now.date())
