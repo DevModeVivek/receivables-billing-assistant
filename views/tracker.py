@@ -15,8 +15,7 @@ reqs = pd.DataFrame(store.all_requests(conn))
 counts = reqs["status"].value_counts()
 cols = st.columns(len(rules.ALL_STATUSES))
 for col, s in zip(cols, rules.ALL_STATUSES):
-    col.markdown(f"<div class='kpi count-card' style='min-height:84px'><div class='kpi-label'>{s}</div>"
-                 f"<div class='kpi-value'>{int(counts.get(s, 0))}</div></div>", unsafe_allow_html=True)
+    ui.status_tile(col, s, int(counts.get(s, 0)))
 
 st.write("")
 f1, f2 = st.columns([2, 1])
@@ -58,7 +57,7 @@ st.subheader(f"{rid} · {req.get('customer_name') or 'no customer name'}")
 st.markdown(f"Status {ui.badge(req['status'])} &nbsp; Checks {ui.badge(result)} &nbsp; "
             f"Next action: **{store.next_action(req, now)}**", unsafe_allow_html=True)
 if req.get("exception"):
-    st.error(ui.esc(f"Reconciliation exception: {req['exception']}"), icon=":material/error:")
+    ui.exception_card("Held at reconciliation", req["exception"])
 
 left, right = st.columns([1, 1])
 with left:

@@ -13,6 +13,7 @@ from typing import Dict, List, Optional
 
 from ai import workflow_context
 from core import receivables as rc
+from workflow import store
 
 PRINCIPLES = [
     "Every number you use comes from the summaries below, which were calculated in Python. Never calculate new "
@@ -33,6 +34,8 @@ ROLE = (
     "synthetic. The team bills other parties for third-party damage recovery, joint-use pole attachments, "
     "customer-requested work and connection fees, then collects the receivables. Write for a busy manager: short, "
     "specific, plain English, bullet points where helpful, most important first, no greetings or sign-offs. "
+    "Keep answers under about 150 words unless the visitor asks for more. Pick the three to five figures that "
+    "matter most for the question; never list every figure. "
     "Use the headings 'What the data shows' and 'Suggested next steps' when you give recommendations."
 )
 
@@ -116,3 +119,29 @@ def suggestions(page: Optional[str], conn=None) -> List[str]:
 def explain_exception_question(request_id: str) -> str:
     return (f"Explain the reconciliation exception on {request_id} in plain English: what was sent, what the "
             "billing system invoiced, why it is not marked billed, and what a person should do next.")
+
+
+def calculated_summary(m: rc.Metrics, conn) -> str:
+    """A short summary built only by Python, shown when the AI cannot answer. Never presented as AI output."""
+    lines = [f"**Receivables** (as of {rc.AS_OF_LABEL}, {m.filters.text()})"]
+    if m.billed:
+        lines.append(f"- {rc.money(m.billed)} billed and {rc.money(m.collected)} collected "
+                     f"({m.collection_rate:.1%} collection rate).")
+    if m.outstanding:
+        lines.append(f"- {rc.money(m.overdue_amt)} overdue; {m.over_90 / m.outstanding:.0%} of everything "
+                     f"outstanding is more than 90 days past due.")
+    if len(m.by_category):
+        lines.append(f"- Largest overdue category: {m.by_category.index[0]}, "
+                     f"{rc.money(m.by_category['OverdueAR'].iloc[0])}.")
+    if len(m.top_customers):
+        top = m.top_customers.iloc[0]
+        lines.append(f"- First account to contact: {top['CustomerName']}, {rc.money(top['OverdueAR'])} overdue.")
+    reqs = store.table(conn, "SELECT status, exception FROM requests")
+    counts = reqs["status"].value_counts()
+    held = int(reqs["exception"].notna().sum())
+    lines += ["", "**Billing request queue**",
+              f"- {int(counts.get('Needs information', 0))} on hold for missing information, "
+              f"{int(counts.get('Awaiting approval', 0))} waiting for a supervisor, "
+              f"{int(counts.get('Ready to bill', 0))} ready to bill.",
+              f"- {held} invoice {'mismatch' if held == 1 else 'mismatches'} held at reconciliation."]
+    return "\n".join(lines)

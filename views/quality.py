@@ -19,9 +19,10 @@ if ready.empty:
     st.caption("Nothing is ready to bill right now.")
 else:
     c = st.columns(3)
-    ui.kpi(c[0], "Requests ready", f"{len(ready)}")
-    ui.kpi(c[1], "Control total", f"${ready['total_amount'].sum():,.2f}", "Sum of the amounts in the batch")
-    ui.kpi(c[2], "Approved over limit", f"{ready['approved_by'].notna().sum()}", "Supervisor approval recorded")
+    ui.kpi(c[0], "Requests ready", f"{len(ready)}", icon_name="check", chip="good")
+    ui.kpi(c[1], "Control total", f"${ready['total_amount'].sum():,.2f}", "Sum of the amounts in the batch", icon_name="sigma")
+    ui.kpi(c[2], "Approved over limit", f"{ready['approved_by'].notna().sum()}", "Supervisor approval recorded",
+           icon_name="approve", chip="warn")
     st.dataframe(ready.rename(columns={"request_id": "Request", "customer_name": "Customer",
                                        "billing_category": "Category", "total_amount": "Amount",
                                        "approved_by": "Approved by"}),

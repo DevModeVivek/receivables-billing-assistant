@@ -1,6 +1,4 @@
 """AI Assistant: one assistant over the receivables reports and the live billing queue."""
-import itertools
-
 import streamlit as st
 
 from ai import context as ai_context
@@ -51,22 +49,22 @@ if question and provider is not None:
             st.markdown(answer)
             st.session_state["chat"] += [{"role": "user", "content": question}, {"role": "assistant", "content": answer}]
         elif (wait := guard.check_rate(st.session_state)):
-            st.warning(wait)
+            st.info(wait, icon=":material/hourglass_top:")
         else:
             history = st.session_state["chat"][-8:] + [{"role": "user", "content": question}]
-            secrets = [providers.setting("GEMINI_API_KEY"), providers.setting("ANTHROPIC_API_KEY")]
             try:
                 with st.spinner("Reading the figures..."):
-                    stream = guard.limit_stream(provider.stream(system, history), secrets)
-                    first = next(stream, "")
-                text = st.write_stream(c.replace("$", "\\$") for c in itertools.chain([first], stream))
-                answer = (text if isinstance(text, str) else "".join(map(str, text))).replace("\\$", "$")
-                if not answer.strip():
-                    raise AIError("The assistant returned an empty answer. Please try again.")
-                st.session_state["chat"] += [{"role": "user", "content": question},
-                                             {"role": "assistant", "content": answer}]
-            except AIError as e:
-                st.error(ui.esc(e), icon=":material/error:")
+                    answer = ui.ai_answer(system, history)
+                st.write_stream(ui.type_out(answer))
+            except AIError:
+                # Never a red error: show the figures Python calculated, clearly labelled as not AI.
+                answer = ai_context.calculated_summary(m, conn)
+                st.caption("The AI is busy right now, so here is the calculated summary from the report pages. "
+                           "Ask again in a minute for a written answer.")
+                st.markdown(ui.esc(answer))
+                answer = "(Calculated summary, not AI)\n\n" + answer
+            st.session_state["chat"] += [{"role": "user", "content": question},
+                                         {"role": "assistant", "content": answer}]
 
 if provider is not None:
     st.caption("AI-generated and can be wrong; check figures on the report pages. Questions are processed by a hosted "
@@ -75,6 +73,4 @@ if st.session_state["chat"] and st.button("New conversation", icon=":material/ad
     st.session_state["chat"] = []
     st.rerun()
 
-with st.expander("Data behind the answers"):
-    st.text(system)
 ui.footer()

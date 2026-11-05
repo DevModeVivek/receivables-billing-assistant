@@ -77,7 +77,7 @@ def test_guided_demo_from_a_fresh_session():
     click(at, "b_approve")
     click(at, "c_go")
     click(at, "c_recon_go")
-    assert any("not Billed" in e.value for e in at.error)
+    assert any("not Billed" in md.value for md in at.markdown)
     click(at, "c_fix")
     assert any("Done." in s.value for s in at.success)
 
@@ -121,3 +121,35 @@ def test_approval_needs_the_supervisor_role_in_the_tracker():
     at.run()
     click(at, f"t_appr_{rid}")
     assert conn.execute("SELECT status FROM requests WHERE request_id = ?", (rid,)).fetchone()[0] == "Ready to bill"
+
+
+class _AlwaysBusy(providers.Provider):
+    def stream(self, system, messages):
+        raise providers.AIError("The assistant is busy right now. Please try again in a minute.")
+        yield ""
+
+    def json(self, system, text, keys):
+        raise providers.AIError("The assistant is busy right now. Please try again in a minute.")
+
+
+def test_ai_failure_shows_calculated_summary_not_an_error(monkeypatch):
+    monkeypatch.setattr(providers, "connect", lambda: _AlwaysBusy())
+    monkeypatch.setattr(providers, "RETRY_DELAYS", (0, 0))
+    at = start()
+    at.switch_page("views/assistant.py")
+    at.run()
+    click(at, "sugg0")
+    assert not at.error
+    assert any("calculated summary" in c.value for c in at.caption)
+    assert any("Billing request queue" in md.value for md in at.markdown)
+    at.switch_page("views/guided_demo.py")
+    at.run()
+    for key in ["a_go", "b_go", "b_draft_go", "b_sent"]:
+        click(at, key)
+    at.text_input(key="b_claim").input("CLM-20931")
+    at.checkbox(key="b_docs").check()
+    at.run()
+    for key in ["b_fix", "b_role", "b_approve", "c_go", "c_recon_go", "c_explain"]:
+        click(at, key)
+    assert any("reconciliation rule" in c.value for c in at.caption)
+    assert not [w for w in at.warning]

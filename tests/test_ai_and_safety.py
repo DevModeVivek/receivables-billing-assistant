@@ -98,15 +98,14 @@ def test_provider_failures_are_reported_honestly(exc, phrase):
         g.json("system", "text", ["a"])
 
 
-def test_gemini_stream_passes_system_prompt_and_history():
+def test_gemini_passes_system_prompt_and_history():
     pytest.importorskip("google.genai")
     seen = {}
 
     class Models:
-        def generate_content_stream(self, model, contents, config):
+        def generate_content(self, model, contents, config):
             seen.update(model=model, contents=contents, system=config.system_instruction)
-            yield SimpleNamespace(text="Answer ")
-            yield SimpleNamespace(text="text")
+            return SimpleNamespace(text="Answer text", candidates=[])
 
     g = _gemini_with(Models())
     out = "".join(g.stream("RULES", [{"role": "user", "content": "q1"}, {"role": "assistant", "content": "a1"},
@@ -160,3 +159,46 @@ def test_upload_limits():
     from workflow import rules
     mapped = exports.match_columns(df, rules.FIELD_LABELS)
     assert list(mapped.columns) == ["customer_account", "total_amount"]
+
+
+class _Flaky(providers.Provider):
+    """Fails a set number of times, then answers."""
+    def __init__(self, failures, error="The assistant could not answer this time."):
+        self.failures, self.error, self.calls, self.backup_used = failures, error, 0, False
+
+    def stream(self, system, messages):
+        self.calls += 1
+        if self.calls <= self.failures:
+            yield "partial "
+            raise providers.AIError(self.error)
+        yield "Full answer."
+
+    def use_backup(self):
+        self.backup_used = True
+        return True
+
+
+def test_brief_failures_are_retried_quietly(monkeypatch):
+    monkeypatch.setattr(providers, "RETRY_DELAYS", (0, 0))
+    p = _Flaky(failures=2)
+    assert providers.answer(p, "s", [{"role": "user", "content": "q"}]) == "Full answer."  # no partial text
+    assert p.calls == 3 and p.backup_used
+
+
+def test_retries_stop_on_key_problems_and_give_up_cleanly(monkeypatch):
+    monkeypatch.setattr(providers, "RETRY_DELAYS", (0, 0))
+    p = _Flaky(failures=9, error="The assistant is unavailable at the moment.")
+    with pytest.raises(providers.AIError):
+        providers.answer(p, "s", [{"role": "user", "content": "q"}])
+    assert p.calls == 1
+    p = _Flaky(failures=9)
+    with pytest.raises(providers.AIError):
+        providers.answer(p, "s", [{"role": "user", "content": "q"}])
+    assert p.calls == 3
+
+
+def test_calculated_summary_uses_python_figures(frames, workspace):
+    m = rc.compute(frames)
+    text = ai_context.calculated_summary(m, workspace)
+    assert rc.money(m.billed) in text and f"{m.collection_rate:.1%}" in text and rc.money(m.overdue_amt) in text
+    assert "on hold for missing information" in text and "AI" not in text

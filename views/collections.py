@@ -9,10 +9,12 @@ m = ui.metrics()
 ui.header("Collections worklist", "Overdue accounts ranked by balance, with invoice detail for follow-up", reporting=True)
 
 c = st.columns(4)
-ui.kpi(c[0], "Overdue balance", rc.money(m.overdue_amt), f"{len(m.overdue):,} invoices", "bad")
-ui.kpi(c[1], "Customers overdue", f"{m.overdue['CustomerName'].nunique():,}", "At least one overdue invoice")
-ui.kpi(c[2], "Active collection cases", f"{m.active_cases:,}", "Open, escalated, disputed or on a plan")
-ui.kpi(c[3], "Pending write-off review", f"{m.write_off_review:,}", "Cases recommended for write-off")
+ui.kpi(c[0], "Overdue balance", rc.money(m.overdue_amt), f"{len(m.overdue):,} invoices", "bad", icon_name="clock")
+ui.kpi(c[1], "Customers overdue", f"{m.overdue['CustomerName'].nunique():,}", "At least one overdue invoice", icon_name="users")
+ui.kpi(c[2], "Active collection cases", f"{m.active_cases:,}", "Open, escalated, disputed or on a plan",
+       icon_name="case", chip="warn")
+ui.kpi(c[3], "Pending write-off review", f"{m.write_off_review:,}", "Cases recommended for write-off", icon_name="ban",
+       chip="bad")
 
 left, right = st.columns([3, 2])
 with left:

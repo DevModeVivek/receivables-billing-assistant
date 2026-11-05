@@ -12,8 +12,7 @@ counts = reqs["status"].value_counts()
 exceptions = int(reqs["exception"].notna().sum())
 
 st.title("Receivables & Billing Insights")
-st.markdown("<div class='page-sub' style='font-size:1.05rem;color:#2F6DB5;font-weight:600;margin-top:-0.8rem'>"
-            "Intelligent Billing Operations</div>", unsafe_allow_html=True)
+st.markdown("<div class='tagline'>Intelligent Billing Operations</div>", unsafe_allow_html=True)
 
 st.markdown(
     "<div class='note'>"
@@ -33,11 +32,14 @@ if b2.button("Open AI Assistant", icon=":material/forum:", width="stretch"):
 
 st.subheader("At a glance")
 c = st.columns(5)
-ui.kpi(c[0], "Total billed", rc.money(m.billed), f"{len(m.inv):,} invoices")
-ui.kpi(c[1], "Collection rate", f"{m.collection_rate:.1%}", f"{rc.money(m.collected)} collected")
-ui.kpi(c[2], "Overdue", rc.money(m.overdue_amt), f"{rc.money(m.over_90)} over 90 days", "bad")
-ui.kpi(c[3], "Requests on hold", f"{int(counts.get('Needs information', 0))}", "Missing information")
-ui.kpi(c[4], "Awaiting approval", f"{int(counts.get('Awaiting approval', 0))}", "Over the approval limit")
+ui.kpi(c[0], "Total billed", rc.money(m.billed), f"{len(m.inv):,} invoices", icon_name="receipt")
+ui.kpi(c[1], "Collection rate", f"{m.collection_rate:.1%}", f"{rc.money(m.collected)} collected", icon_name="trend",
+       chip="good")
+ui.kpi(c[2], "Overdue", rc.money(m.overdue_amt), f"{rc.money(m.over_90)} over 90 days", "bad", icon_name="clock")
+ui.kpi(c[3], "Requests on hold", f"{int(counts.get('Needs information', 0))}", "Missing information",
+       icon_name="hold", chip="bad")
+ui.kpi(c[4], "Awaiting approval", f"{int(counts.get('Awaiting approval', 0))}", "Over the approval limit",
+       icon_name="approve", chip="warn")
 
 left, right = st.columns([1.15, 1])
 with left:
@@ -56,14 +58,13 @@ with left:
                      label="Ask for today's briefing")
 with right:
     st.subheader("Two-minute demo")
-    for title, text in [
-        ("A. A complete request", "Checked in seconds and ready to bill."),
-        ("B. Missing information", "Held, followed up, corrected and approved."),
-        ("C. A billing mismatch", "A wrong invoice is caught before it is marked billed."),
+    for title, text, ico, tone in [
+        ("A. A complete request", "Checked in seconds and ready to bill.", "check", "good"),
+        ("B. Missing information", "Held, followed up, corrected and approved.", "mail", "warn"),
+        ("C. A billing mismatch", "A wrong invoice is caught before it is marked billed.", "shield", "bad"),
     ]:
-        with st.container(border=True):
-            st.markdown(f"**{title}**  \n<span style='color:#64748B;font-size:0.9rem'>{text}</span>",
-                        unsafe_allow_html=True)
+        st.markdown(f"<div class='scenario'><span class='kpi-chip {tone}'>{ui.icon(ico, 17)}</span>"
+                    f"<div><b>{title}</b><br><span>{text}</span></div></div>", unsafe_allow_html=True)
     if st.button("Start the guided demo", icon=":material/arrow_forward:"):
         st.switch_page("views/guided_demo.py")
 ui.footer()

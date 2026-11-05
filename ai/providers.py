@@ -20,14 +20,29 @@ The model never changes a request. It only reads the text it is given.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
+import time
 from typing import Dict, Iterator, List, Optional
 
 DEFAULT_GEMINI_MODEL = "gemini-3.5-flash-lite"  # stable; set GEMINI_MODEL = "gemini-3.8-flash" for the larger model
+DEFAULT_GEMINI_BACKUP = "gemini-3.8-flash"     # tried on the last attempt if the main model keeps failing
 DEFAULT_CLAUDE_MODEL = "claude-opus-5-5"
 DEFAULT_OLLAMA_MODEL = "qwen2.5:3b"
 MAX_OUTPUT_TOKENS = 1500
+GEMINI_MAX_OUTPUT_TOKENS = 4096  # Gemini counts its internal reasoning against this limit
+RETRY_DELAYS = (1.5, 4.0)  # seconds to wait before the second and third attempts
+
+
+LOG = logging.getLogger("billing_insights.ai")
+
+
+def _log_failure(exc: Exception, provider: str, model: str) -> None:
+    """Record why a call failed, for the app owner's logs. Only the error type and status code, never the message,
+    which could contain a key."""
+    LOG.warning("Assistant call failed: provider=%s model=%s error=%s code=%s", provider, model,
+                type(exc).__name__, getattr(exc, "code", None) or getattr(exc, "status_code", None))
 
 
 class AIError(RuntimeError):
@@ -65,6 +80,10 @@ class Provider:
     def stream(self, system: str, messages: List[Dict[str, str]]) -> Iterator[str]:
         raise NotImplementedError
 
+    def use_backup(self) -> bool:
+        """Switch to a backup model for the final attempt, if there is one."""
+        return False
+
     def json(self, system: str, text: str, keys: List[str]) -> Dict[str, str]:
         raise NotImplementedError
 
@@ -88,38 +107,51 @@ def _parse_json(text: str) -> dict:
 class Gemini(Provider):
     name = "Google Gemini"
 
-    def __init__(self, key: str, model: str):
+    def __init__(self, key: str, model: str, backup: Optional[str] = None):
         from google import genai
         from google.genai import types
         self.types = types
         self.client = genai.Client(api_key=key)
         self.model = model
+        self.backup = backup
+
+    def use_backup(self):
+        if self.backup and self.backup != self.model:
+            self.model, self.backup = self.backup, None
+            return True
+        return False
 
     def _contents(self, messages):
         return [{"role": "model" if m["role"] == "assistant" else "user", "parts": [{"text": m["content"]}]}
                 for m in messages]
 
     def stream(self, system, messages):
+        # One complete request rather than a streamed one: the app shows only finished answers, and a single
+        # response cannot break off halfway.
         config = self.types.GenerateContentConfig(system_instruction=system, temperature=0.2,
-                                                  max_output_tokens=MAX_OUTPUT_TOKENS)
+                                                  max_output_tokens=GEMINI_MAX_OUTPUT_TOKENS)
         try:
-            for chunk in self.client.models.generate_content_stream(model=self.model,
-                                                                    contents=self._contents(messages), config=config):
-                if chunk.text:
-                    yield chunk.text
-        except AIError:
-            raise
+            reply = self.client.models.generate_content(model=self.model, contents=self._contents(messages),
+                                                        config=config)
+            text = reply.text or ""
         except Exception as exc:
+            _log_failure(exc, self.name, self.model)
             raise _safe_error(exc, self.name) from None
+        if not text.strip():
+            reason = getattr((reply.candidates or [None])[0], "finish_reason", None)
+            LOG.warning("Assistant returned no text: model=%s finish_reason=%s", self.model, reason)
+            raise AIError("The assistant returned an empty answer.")
+        yield text
 
     def json(self, system, text, keys):
         config = self.types.GenerateContentConfig(system_instruction=system, temperature=0,
-                                                  max_output_tokens=MAX_OUTPUT_TOKENS,
+                                                  max_output_tokens=GEMINI_MAX_OUTPUT_TOKENS,
                                                   response_mime_type="application/json",
                                                   response_json_schema=_schema(keys))
         try:
             reply = self.client.models.generate_content(model=self.model, contents=text, config=config)
         except Exception as exc:
+            _log_failure(exc, self.name, self.model)
             raise _safe_error(exc, self.name) from None
         return _parse_json(reply.text)
 
@@ -190,7 +222,8 @@ def _try_gemini() -> Optional[Provider]:
     if not key:
         return None
     try:
-        return Gemini(key, setting("GEMINI_MODEL") or DEFAULT_GEMINI_MODEL)
+        return Gemini(key, setting("GEMINI_MODEL") or DEFAULT_GEMINI_MODEL,
+                      setting("GEMINI_BACKUP_MODEL") or DEFAULT_GEMINI_BACKUP)
     except ImportError:
         return None
 
@@ -230,3 +263,37 @@ def connect() -> Optional[Provider]:
         if provider:
             return provider
     return None
+
+
+def _with_retries(provider: Provider, call):
+    """Run `call` up to three times. Brief overloads and dropped connections are common on free tiers, so a
+    failure is retried quietly; the visitor sees nothing until a complete answer exists. A key problem is not
+    retried. The last attempt uses the backup model when there is one."""
+    last: Optional[AIError] = None
+    for attempt, delay in enumerate((0.0,) + tuple(RETRY_DELAYS)):
+        if delay:
+            time.sleep(delay)
+        if attempt == len(RETRY_DELAYS):
+            provider.use_backup()
+        try:
+            return call()
+        except AIError as err:
+            last = err
+            if "unavailable" in str(err):
+                break
+    raise last or AIError("The assistant could not answer this time.")
+
+
+def answer(provider: Provider, system: str, messages: List[Dict[str, str]]) -> str:
+    """The complete answer text, or AIError if every attempt failed or came back empty."""
+    def once():
+        text = "".join(provider.stream(system, messages))
+        if not text.strip():
+            raise AIError("The assistant returned an empty answer.")
+        return text
+    return _with_retries(provider, once)
+
+
+def fields(provider: Provider, system: str, text: str, keys: List[str]) -> Dict[str, str]:
+    """Structured fields from text, with the same quiet retries."""
+    return _with_retries(provider, lambda: provider.json(system, text, keys))

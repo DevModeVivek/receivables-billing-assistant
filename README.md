@@ -77,7 +77,7 @@ The approval limit, rate card, cost centres and rules are illustrative, not any 
 Python does the work; the AI explains it.
 
 1. Every figure, check, status and match is calculated by plain code and gives the same answer every time.
-2. The assistant receives only verified summaries: the Version 1 figures for the current filters, and the visitor's live queue. The exact text is shown under "What the assistant was given".
+2. The assistant receives only verified summaries: the Version 1 figures for the current filters, and the visitor's live queue.
 3. It follows ten rules, including: never invent figures or records, say when the data is not enough, keep observations separate from recommendations, show the evidence, and never take actions.
 4. For free-text emails, the AI suggests field values. Each value is checked against the email text, and anything not found there is flagged for a person.
 5. Questions and emails are treated as untrusted text: length limits, prompt-injection screening, a per-visitor question cap, and an answer length limit.

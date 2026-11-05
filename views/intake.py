@@ -142,10 +142,11 @@ with tab_email:
         try:
             fields, source = extract.read_email(text, provider)
             st.session_state["e_fields"] = (fields, source)
-        except AIError as e:
+        except AIError:
             fields, source = extract.read_email(text, None)
             st.session_state["e_fields"] = (fields, source)
-            st.warning(ui.esc(f"{e} The template parser was used instead."))
+            st.info("The AI is busy right now, so the template reader was used. Fill any gaps by hand.",
+                    icon=":material/info:")
     if st.session_state.get("e_fields"):
         fields, source = st.session_state["e_fields"]
         table = pd.DataFrame([{"Field": rules.FIELD_LABELS[f], "Value": "" if fields.get(f) is None else str(fields.get(f)),
