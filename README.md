@@ -2,7 +2,7 @@
 
 **Intelligent Billing Operations.** A working prototype for a utility's billing and receivables team. It shows where money is owed, checks incoming billing requests before they are billed, catches invoice errors before anything is marked billed, and includes an assistant that answers questions from calculated figures.
 
-**Live demo:** _link added after deployment_
+**Live demo:** [billing-insights-vivek.streamlit.app](https://billing-insights-vivek.streamlit.app) (free hosting: if it has been asleep, it takes a moment to wake)
 
 All customers, requests and amounts are synthetic. This is an independent portfolio project. It is not affiliated with, commissioned by or endorsed by any company.
 
