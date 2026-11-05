@@ -1,5 +1,9 @@
-streamlit
-pandas
-openpyxl
-plotly
-ollama
+streamlit==1.50.0
+pandas==2.3.3
+openpyxl==3.1.5
+plotly==7.1.0
+tzdata
+# AI providers. Each is optional; the app works without them.
+google-genai==2.34.0; python_version >= "3.11"
+anthropic==2.5.0; python_version >= "3.10"
+ollama==0.6.3
