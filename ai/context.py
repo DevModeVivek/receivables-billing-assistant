@@ -11,7 +11,10 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Dict, List, Optional
 
+import re
+
 from ai import workflow_context
+from ai.answer import FORMAT_RULES
 from core import receivables as rc
 from workflow import store
 
@@ -30,13 +33,11 @@ PRINCIPLES = [
 ]
 
 ROLE = (
-    "You are the operations assistant in a demo app for a utility's billing and receivables team. All data is "
+    "You are the operations assistant in a demo app for a utility's non-energy billing and receivables team. All data is "
     "synthetic. The team bills other parties for third-party damage recovery, joint-use pole attachments, "
     "customer-requested work and connection fees, then collects the receivables. Write for a busy manager: short, "
-    "specific, plain English, bullet points where helpful, most important first, no greetings or sign-offs. "
-    "Keep answers under about 150 words unless the visitor asks for more. Pick the three to five figures that "
-    "matter most for the question; never list every figure. "
-    "Use the headings 'What the data shows' and 'Suggested next steps' when you give recommendations."
+    "specific, plain English, most important first, no greetings or sign-offs. Pick the few figures that matter "
+    "most for the question; never list every figure. Refer to requests by their ID (for example BR-26-0115)."
 )
 
 SECURITY = (
@@ -46,8 +47,36 @@ SECURITY = (
 )
 
 
+_BIG_AMOUNT = re.compile(r"\$(\d{1,3}(?:,\d{3})+)(\.\d+)?")
+
+
+def _with_short_forms(line: str) -> str:
+    """Add the short form the report pages use after large amounts: $4,924,926 ($4.92M)."""
+    def add(match):
+        value = float(match.group(1).replace(",", "") + (match.group(2) or ""))
+        return match.group(0) + (f" ({rc.money(value)})" if value >= 100_000 else "")
+    return re.sub(r"(\d+)\.0 invoices", r"\1 invoices", _BIG_AMOUNT.sub(add, line))
+
+
+def _ratios(m: rc.Metrics) -> List[str]:
+    lines = []
+    if m.outstanding:
+        lines += [f"Overdue as a share of outstanding: {m.overdue_amt / m.outstanding:.0%}",
+                  f"More than 90 days past due as a share of outstanding: {m.over_90 / m.outstanding:.0%}"]
+    if m.overdue_amt and len(m.by_category):
+        lines.append(f"{m.by_category.index[0]} share of the overdue balance: "
+                     f"{m.by_category['OverdueAR'].iloc[0] / m.overdue_amt:.0%}")
+    if len(m.cycle_by_cat) > 1:
+        slow = m.cycle_by_cat
+        lines.append(f"Slowest category to invoice: {slow.index[-1]}, {slow.iloc[-1]:.1f} days, against "
+                     f"{slow.drop(slow.index[-1]).mean():.1f} days on average for the other categories")
+    return lines
+
+
 def reporting_summary(m: rc.Metrics) -> str:
-    sections = rc.summary_lines(m)
+    sections = dict(rc.summary_lines(m))
+    sections = {name: [_with_short_forms(line) for line in lines] for name, lines in sections.items()}
+    sections["Key ratios (calculated in Python)"] = _ratios(m)
     return (f"REPORTING SUMMARY (Version 1 reports, fixed snapshot as of {rc.AS_OF_LABEL}; "
             f"filters: {m.filters.text()})\n"
             + "\n\n".join(f"{name}:\n" + ("\n".join(f"- {line}" for line in lines) or "- none")
@@ -63,7 +92,7 @@ def system_prompt(m: rc.Metrics, conn, customers: dict, now: datetime, page: Opt
     rules = "\n".join(f"{i}. {p}" for i, p in enumerate(PRINCIPLES, 1))
     focus = f"\nThe visitor opened the assistant from the {page} page; favour that topic when the question is vague." \
         if page else ""
-    return (f"{ROLE}\n\nRules you always follow:\n{rules}\n\n{SECURITY}{focus}\n\n"
+    return (f"{ROLE}\n\nRules you always follow:\n{rules}\n\n{SECURITY}{focus}\n\n{FORMAT_RULES}\n\n"
             f"{reporting_summary(m)}\n\n{workflow_summary(conn, customers, now)}")
 
 

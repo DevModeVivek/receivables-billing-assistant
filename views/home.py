@@ -17,8 +17,8 @@ st.markdown("<div class='tagline'>Intelligent Billing Operations</div>", unsafe_
 st.markdown(
     "<div class='note'>"
     "<b>Hi, I'm Vivek.</b> Version 1 of this app showed where the money is: what has been billed, collected and "
-    "is still owed. Version 2 goes one step earlier, to the billing requests themselves. It shows how damage "
-    "recovery, pole attachment, customer-requested work and connection requests could be checked on arrival, "
+    "is still owed. Version 2 goes one step earlier, to the non-energy billing requests themselves. It shows "
+    "how damage recovery, pole attachment, customer-requested work and connection requests could be checked on arrival, "
     "followed up automatically and matched to their invoices, so the team spends its time on exceptions, "
     "not on retyping and chasing."
     "<div class='note-sign'>Vivek Kumar · Computer Science (Co-op), Algoma University</div></div>",

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import html
+import json
 from datetime import datetime
 from typing import Callable, List, Optional
 
@@ -9,6 +10,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
+from ai import answer as fmt
 from ai import guard, providers
 from core import receivables as rc
 from workflow import sample_data, store
@@ -153,6 +155,20 @@ section[data-testid="stSidebar"] {background: var(--surface); border-right: 1px 
              margin: 0.4rem 0 0.8rem 0;}
 .exception b {color: var(--ink);}
 .exception .ex-body {color: var(--text); font-size: 0.92rem; margin-top: 2px;}
+.ans-lead {font-size: 1.02rem; font-weight: 600; color: var(--ink); line-height: 1.5; margin-bottom: 0.4rem;}
+.ans-head {color: var(--muted); font-size: 0.72rem; font-weight: 700; text-transform: uppercase;
+           letter-spacing: 0.06em; margin: 0.8rem 0 0.35rem 0;}
+.ans-item {display: flex; gap: 9px; align-items: flex-start; color: var(--text); font-size: 0.95rem;
+           line-height: 1.5; margin: 0.3rem 0;}
+.ans-item .ico {color: var(--teal); margin-top: 0.45em;}
+.ans-num {flex: none; display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px;
+          border-radius: 50%; background: var(--teal-tint); color: var(--teal); font-size: 0.72rem; font-weight: 700;
+          margin-top: 0.12em;}
+.chips {display: flex; flex-wrap: wrap; gap: 6px; margin: 0.9rem 0 0.4rem 0;}
+.chip {display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 999px;
+       font-size: 0.75rem; color: #55595A; background: var(--grey-tint); border: 1px solid var(--line);}
+.chip.ok {color: var(--green); background: var(--green-tint); border-color: #BFE0C9;}
+.chip.warn {color: var(--amber); background: var(--amber-tint); border-color: #F1D2AE;}
 .footer {color: var(--muted); font-size: 0.76rem; margin-top: 2.5rem; border-top: 1px solid var(--line);
          padding-top: 0.8rem;}
 div[data-testid="stChatMessage"] {background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
@@ -291,27 +307,78 @@ def ai_provider():
 
 
 @st.cache_data(ttl=6 * 3600, max_entries=300, show_spinner=False)
-def _cached_answer(system: str, history: tuple) -> str:
+def _cached_answer(system: str, history: tuple) -> dict:
+    """Ask once, check every amount and percentage against the app's figures, and ask again once if any figure
+    is not found. The same question on the same figures is reused for six hours (failures are not cached)."""
     provider = ai_provider()
     if provider is None:
         raise providers.AIError("The assistant is offline.")
-    return providers.answer(provider, system, [{"role": r, "content": c} for r, c in history])
+    messages = [{"role": r, "content": c} for r, c in history]
+    data = fmt.clean(providers.structured(provider, system, messages, fmt.SCHEMA))
+    if not data["answer"]:
+        raise providers.AIError("The assistant returned an empty answer.")
+    bad = fmt.unmatched(fmt.all_text(data), system)
+    if bad:
+        retry = messages + [
+            {"role": "assistant", "content": json.dumps(data)},
+            {"role": "user", "content": f"These figures are not in the summaries: {', '.join(bad)}. Answer my question "
+                                        f"again, using only figures exactly as they appear in the summaries. My question "
+                                        f"was: {messages[-1]['content']}"}]
+        try:
+            again = fmt.clean(providers.structured(provider, system, retry, fmt.SCHEMA))
+            again_bad = fmt.unmatched(fmt.all_text(again), system)
+            if again["answer"] and len(again_bad) < len(bad):
+                data, bad = again, again_bad
+        except providers.AIError:
+            pass
+    data["unverified"] = bad
+    return data
 
 
-def ai_answer(system: str, messages: List[dict]) -> str:
-    """A complete, checked answer. The same question on the same figures is answered once and reused for six
-    hours, which keeps the free AI quota for new questions. Failures are not cached. Raises AIError."""
-    secrets = [providers.setting("GEMINI_API_KEY"), providers.setting("ANTHROPIC_API_KEY")]
-    text = _cached_answer(system, tuple((m["role"], m["content"]) for m in messages))
-    return "".join(guard.limit_stream([text], secrets))
+def ai_answer(system: str, messages: List[dict]) -> dict:
+    """A structured, checked answer (see ai/answer.py). Raises AIError when the AI cannot answer."""
+    secrets = [s for s in (providers.setting("GEMINI_API_KEY"), providers.setting("ANTHROPIC_API_KEY")) if s]
+    data = dict(_cached_answer(system, tuple((m["role"], m["content"]) for m in messages)))
+    for key in ("answer", "draft"):
+        data[key] = guard.redact(data[key], secrets)[:guard.MAX_ANSWER_CHARS]
+    for key in ("findings", "next_steps", "follow_ups"):
+        data[key] = [guard.redact(v, secrets) for v in data[key]]
+    return data
 
 
-def type_out(text: str):
-    """Show a finished answer word by word, so it reads like a reply rather than appearing all at once."""
-    import time
-    for word in esc(text).split(" "):
-        yield word + " "
-        time.sleep(0.012)
+def render_answer(data: dict, key: str, follow_ups: bool = True) -> None:
+    """One answer, always in the same order: answer, what the data shows, next steps, draft, checks and sources."""
+    st.markdown(f"<div class='ans-lead'>{_safe(data['answer'])}</div>", unsafe_allow_html=True)
+    if data.get("findings"):
+        st.markdown("<div class='ans-head'>What the data shows</div>" +
+                    "".join(f"<div class='ans-item'>{icon('dot', 10)}<span>{_safe(f)}</span></div>"
+                            for f in data["findings"]), unsafe_allow_html=True)
+    if data.get("next_steps"):
+        st.markdown("<div class='ans-head'>Suggested next steps</div>" +
+                    "".join(f"<div class='ans-item'><span class='ans-num'>{i}</span><span>{_safe(s)}</span></div>"
+                            for i, s in enumerate(data["next_steps"], 1)), unsafe_allow_html=True)
+    if data.get("draft"):
+        with st.container(border=True):
+            st.caption("Draft for you to review before use")
+            st.markdown(esc(data["draft"]))
+            st.download_button("Download draft", data["draft"], file_name="draft.txt", mime="text/plain",
+                               icon=":material/download:", key=f"dl_{key}")
+    chips = []
+    if data.get("unverified"):
+        chips.append(f"<span class='chip warn'>{icon('alert', 13)}Check on the report pages: "
+                     f"{_safe(', '.join(data['unverified']))}</span>")
+    else:
+        chips.append(f"<span class='chip ok'>{icon('check', 13)}Amounts and percentages match the app's "
+                     f"figures</span>")
+    for source in data.get("sources") or []:
+        label = f"{source} · {rc.AS_OF_LABEL}" if source == "Receivables report" else source
+        chips.append(f"<span class='chip'>{icon('file', 13)}{_safe(label)}</span>")
+    st.markdown(f"<div class='chips'>{''.join(chips)}</div>", unsafe_allow_html=True)
+    if follow_ups and data.get("follow_ups"):
+        cols = st.columns(len(data["follow_ups"]))
+        for i, (col, q) in enumerate(zip(cols, data["follow_ups"])):
+            col.button(q, key=f"fu_{key}_{i}", icon=":material/subdirectory_arrow_right:", width="stretch",
+                       on_click=lambda q=q: st.session_state.update(assistant_pending=q))
 
 
 # ---------------------------------------------------------------- page furniture

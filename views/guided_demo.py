@@ -183,28 +183,29 @@ with st.container(border=True):
                 "usually means a keying error. Because they do not match, the request is held instead of being "
                 "marked billed. Next step: ask the billing system team to reissue the invoice for the requested "
                 "amount, then record the corrected invoice.")
+            def show_explanation(explained):
+                if isinstance(explained, dict):
+                    st.caption("AI explanation, based only on the app's calculated figures")
+                    ui.render_answer(explained, key="c_explain", follow_ups=False)
+                else:
+                    st.caption("Explanation from the reconciliation rule:")
+                    st.markdown(ui.esc(explained))
+
             if demo.get("c_explained"):
-                st.caption(demo.get("c_explained_by", "AI explanation, based only on the app's calculated figures"))
-                st.markdown(ui.esc(demo["c_explained"]))
+                with st.container(border=True):
+                    show_explanation(demo["c_explained"])
             elif provider is None:
-                st.caption("Explanation from the reconciliation rule:")
-                st.markdown(ui.esc(rule_text))
+                with st.container(border=True):
+                    show_explanation(rule_text)
             elif st.button("Explain this exception", key="c_explain", icon=":material/forum:"):
                 q = ai_context.explain_exception_question(res["target"])
                 system = ai_context.system_prompt(ui.metrics(), conn, customers, ui.now(), "Billing Quality")
-                with st.container(border=True):
-                    try:
-                        with st.spinner("Reading the reconciliation..."):
-                            text = ui.ai_answer(system, [{"role": "user", "content": q}])
-                        st.caption("AI explanation, based only on the app's calculated figures")
-                        st.write_stream(ui.type_out(text))
-                        demo["c_explained_by"] = "AI explanation, based only on the app's calculated figures"
-                    except AIError:
-                        text = rule_text
-                        demo["c_explained_by"] = "Explanation from the reconciliation rule (the AI is busy right now):"
-                        st.caption(demo["c_explained_by"])
-                        st.markdown(ui.esc(text))
-                demo["c_explained"] = text
+                try:
+                    with st.spinner("Reading the reconciliation..."):
+                        demo["c_explained"] = ui.ai_answer(system, [{"role": "user", "content": q}])
+                except AIError:
+                    demo["c_explained"] = rule_text
+                st.rerun()
 
             st.markdown("**4. Record the corrected invoice**")
             if not demo.get("c_resolved"):

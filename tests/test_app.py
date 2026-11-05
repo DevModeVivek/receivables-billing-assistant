@@ -124,12 +124,27 @@ def test_approval_needs_the_supervisor_role_in_the_tracker():
 
 
 class _AlwaysBusy(providers.Provider):
-    def stream(self, system, messages):
+    def stream(self, system, messages, model=None):
         raise providers.AIError("The assistant is busy right now. Please try again in a minute.")
         yield ""
 
-    def json(self, system, text, keys):
+    def structured(self, system, messages, schema, model=None):
         raise providers.AIError("The assistant is busy right now. Please try again in a minute.")
+
+
+class _Answers(providers.Provider):
+    """Answers in the fixed format. The first answer quotes a figure that is not in the app; the re-ask fixes it."""
+    def __init__(self):
+        self.calls = 0
+
+    def structured(self, system, messages, schema, model=None):
+        self.calls += 1
+        import re
+        overdue = re.search(r"Overdue: \$[\d,]+ \((\$[\d.]+M)\)", system).group(1)
+        wrong = self.calls == 1
+        return {"answer": f"Overdue receivables are {'$9.99M' if wrong else overdue}.",
+                "findings": ["Most of it is more than 90 days past due."], "next_steps": ["Call the largest accounts."],
+                "draft": "", "sources": ["Receivables report"], "follow_ups": ["Who owes the most?", "Why?"]}
 
 
 def test_ai_failure_shows_calculated_summary_not_an_error(monkeypatch):
@@ -153,3 +168,19 @@ def test_ai_failure_shows_calculated_summary_not_an_error(monkeypatch):
         click(at, key)
     assert any("reconciliation rule" in c.value for c in at.caption)
     assert not [w for w in at.warning]
+
+
+def test_assistant_answer_is_structured_checked_and_re_asked(monkeypatch):
+    fake = _Answers()
+    monkeypatch.setattr(providers, "connect", lambda: fake)
+    import streamlit as st
+    st.cache_data.clear()
+    at = start()
+    at.switch_page("views/assistant.py")
+    at.run()
+    click(at, "sugg0")
+    page = " ".join(md.value for md in at.markdown)
+    assert fake.calls == 2 and "$9.99M" not in page  # the wrong figure was caught and the question re-asked
+    assert "What the data shows" in page and "Suggested next steps" in page
+    assert "match the app" in page and not at.error
+    assert [b for b in at.button if b.key and b.key.startswith("fu_")]  # follow-up questions offered

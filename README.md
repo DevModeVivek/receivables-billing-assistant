@@ -1,6 +1,6 @@
 # Receivables & Billing Insights 2.0
 
-**Intelligent Billing Operations.** A working prototype for a utility's billing and receivables team. It shows where money is owed, checks incoming billing requests before they are billed, catches invoice errors before anything is marked billed, and includes an assistant that answers questions from calculated figures.
+**Intelligent Billing Operations.** A working prototype for a utility's non-energy billing and receivables team. It shows where money is owed, checks incoming billing requests before they are billed, catches invoice errors before anything is marked billed, and includes an assistant that answers questions from calculated figures.
 
 **Live demo:** [billing-insights-vivek.streamlit.app](https://billing-insights-vivek.streamlit.app) (free hosting: if it has been asleep, it takes a moment to wake)
 
@@ -77,13 +77,15 @@ The approval limit, rate card, cost centres and rules are illustrative, not any 
 Python does the work; the AI explains it.
 
 1. Every figure, check, status and match is calculated by plain code and gives the same answer every time.
-2. The assistant receives only verified summaries: the Version 1 figures for the current filters, and the visitor's live queue.
-3. It follows ten rules, including: never invent figures or records, say when the data is not enough, keep observations separate from recommendations, show the evidence, and never take actions.
-4. For free-text emails, the AI suggests field values. Each value is checked against the email text, and anything not found there is flagged for a person.
-5. Questions and emails are treated as untrusted text: length limits, prompt-injection screening, a per-visitor question cap, and an answer length limit.
-6. If the AI fails or is not configured, the app says so. It never shows a made-up answer.
+2. The assistant receives only verified summaries: the Version 1 figures for the current filters, a few ratios calculated in Python, and the visitor's live queue.
+3. Every answer has the same parts: a direct answer, what the data shows (each point with its figure and source), suggested next steps when useful, a draft when asked for one, the sources used and two follow-up questions.
+4. Before an answer is shown, every amount and percentage in it is matched against the app's own figures. If one does not match, the question is asked again once; anything still unmatched is flagged on the answer.
+5. It follows ten rules, including: never invent figures or records, say when the data is not enough, keep observations separate from recommendations, and never take actions.
+6. For free-text emails, the AI suggests field values. Each value is checked against the email text, and anything not found there is flagged for a person.
+7. Questions and emails are treated as untrusted text: length limits, prompt-injection screening, a per-visitor question cap, and an answer length limit.
+8. Brief AI outages are retried quietly, with a backup model on the last try. If the AI still cannot answer, the app shows the calculated summary (or the reconciliation rule) and says so. It never shows a made-up answer.
 
-The live demo uses a hosted AI model on a free tier, so questions (with fictional demo data only) are processed by that service and usage is limited. Run locally, the assistant can use [Ollama](https://ollama.com) instead, so nothing leaves the computer.
+The live demo uses a hosted AI model on a free tier, so questions (with fictional demo data only) are processed by that service and usage is limited. Repeated questions on the same figures are answered from a six-hour cache. Run locally, the assistant can use [Ollama](https://ollama.com) instead, so nothing leaves the computer.
 
 ## Run it locally
 
@@ -125,6 +127,7 @@ workflow/sample_data.py Synthetic workflow history, built on the Version 1 custo
 workflow/exports.py     Safe CSV/Excel export and upload limits
 ai/providers.py         Hosted and local AI models behind one interface, with honest errors
 ai/context.py           The assistant's rules and verified context
+ai/answer.py            The fixed answer format and the figure check
 ai/guard.py             Input, output and rate limits, prompt-injection screening
 views/                  One file per page
 tests/                  Version 1 figures, workflow controls, AI safety, exports, and the running app

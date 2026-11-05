@@ -28,12 +28,14 @@ if search:
                 .apply(lambda c: c.str.lower().str.contains(s, regex=False)).any(axis=1)]
 view["next_action"] = [store.next_action(r, now) for r in view.to_dict("records")]
 view = view.sort_values("received_at", ascending=False)
-table = view[["request_id", "received_at", "submitted_by_team", "customer_name", "billing_category", "total_amount",
-              "status", "next_action"]].rename(columns={
+table = view[["request_id", "status", "next_action", "customer_name", "total_amount", "billing_category",
+              "submitted_by_team", "received_at"]].rename(columns={
     "request_id": "Request", "received_at": "Received", "submitted_by_team": "Team", "customer_name": "Customer",
     "billing_category": "Category", "total_amount": "Amount", "status": "Status", "next_action": "Next action"})
 event = st.dataframe(table, hide_index=True, width="stretch", height=360, on_select="rerun", selection_mode="single-row",
-                     column_config={"Amount": st.column_config.NumberColumn(format="dollar")}, key="t_table")
+                     column_config={"Amount": st.column_config.NumberColumn(format="dollar"),
+                                    "Request": st.column_config.TextColumn(width="small"),
+                                    "Next action": st.column_config.TextColumn(width="medium")}, key="t_table")
 picked = event.selection.rows if event and event.selection else []
 options = view["request_id"].tolist()
 if picked and picked[0] < len(options) and options[picked[0]] != st.session_state.get("t_last_row"):
