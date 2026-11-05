@@ -41,10 +41,6 @@ pages = {
         page("views/assistant.py", "AI Assistant", "forum"),
         page("views/insights.py", "Process Insights", "insights"),
     ],
-    "Project": [
-        page("views/business_case.py", "Business Case", "description"),
-        page("views/about.py", "About", "info"),
-    ],
 }
 
 nav = st.navigation(pages, position="sidebar", expanded=True)

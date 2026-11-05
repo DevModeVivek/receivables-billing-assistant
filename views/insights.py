@@ -12,8 +12,7 @@ checks = store.table(conn, "SELECT * FROM checks_log WHERE run_no = 1")
 events = store.table(conn, "SELECT * FROM events")
 
 ui.header("Process insights", "How the billing request process is performing in the demo workspace")
-st.caption("These figures come from simulated demo requests. They show how each measure would work in a pilot; "
-           "they are not real results and no savings are claimed.")
+st.caption("Simulated demo requests. These show how each measure would be tracked in a pilot, not real results.")
 
 first = reqs[reqs["first_pass_clean"].notna()]
 billed = reqs[reqs["status"] == "Billed"]
@@ -23,21 +22,21 @@ keying = int((events["action"] == "Reconciliation exception").sum())
 followups = int(reqs["followups_sent"].fillna(0).sum())
 
 MEASURES = [
-    ("Requests received", f"{len(reqs)}", "Every request logged in the demo period, from any source."),
-    ("Complete first time", f"{first['first_pass_clean'].mean():.0%}" if len(first) else "-",
-     "Share of requests with no Must fix problem on their first check."),
+    ("Requests received", f"{len(reqs)}", "Every request logged in the demo period, from any source.", "inbox", ""),
+    ("First-time complete", f"{first['first_pass_clean'].mean():.0%}" if len(first) else "-",
+     "Share of requests with no Must fix problem on their first check.", "target", "good"),
     ("Median days to invoice", f"{days.median():.1f}" if len(days) else "-",
-     "Median calendar days from request received to invoice confirmed, for billed requests."),
-    ("Problems caught at intake", f"{len(blockers)}", "Must fix problems found on first check, before billing."),
-    ("Keying errors caught", f"{keying}", "Invoices that did not match their request at reconciliation."),
-    ("Follow-ups and reminders", f"{followups}", "Emails recorded as sent to requesters for missing information."),
+     "Median calendar days from request received to invoice confirmed, for billed requests.", "clock", ""),
+    ("Caught at intake", f"{len(blockers)}", "Must fix problems found on first check, before billing.", "shield", "warn"),
+    ("Keying errors", f"{keying}", "Invoices that did not match their request at reconciliation.", "alert", "bad"),
+    ("Follow-ups", f"{followups}", "Emails recorded as sent to requesters for missing information.", "mail", "info"),
 ]
 cols = st.columns(len(MEASURES))
-for col, (label, value, definition) in zip(cols, MEASURES):
-    ui.kpi(col, label, value, help_text=definition)
+for col, (label, value, definition, ico, chip) in zip(cols, MEASURES):
+    ui.kpi(col, label, value, help_text=definition, icon_name=ico, chip=chip)
 
 with st.expander("Definitions", expanded=False):
-    for label, _, definition in MEASURES:
+    for label, _, definition, *_ in MEASURES:
         st.markdown(f"- **{label}:** {definition}")
 
 left, right = st.columns(2)

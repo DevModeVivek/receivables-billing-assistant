@@ -3,7 +3,6 @@ import pandas as pd
 import streamlit as st
 
 from ai import context as ai_context
-from ai import guard
 from ai.providers import AIError
 from views import common as ui
 from workflow import exports, rules, scenarios, store
@@ -170,40 +169,43 @@ with st.container(border=True):
             st.markdown(f"{counts.get('Matched', 0)} matched and marked billed. "
                         f"{len(res['held'])} held: {ui.badge('Amount differs')}", unsafe_allow_html=True)
             if res.get("target"):
-                st.error(ui.esc(f"{res['target']}: request ${res['requested']:,.2f}, invoice {res['invoice_number']} "
-                         f"${res['invoiced']:,.2f}. Difference {'-' if res['invoiced'] < res['requested'] else '+'}"
-                         f"${abs(res['invoiced'] - res['requested']):,.2f}. "
-                         "It stays In billing batch, not Billed."), icon=":material/error:")
+                ui.exception_card(
+                    f"{res['target']}: caught before billing",
+                    f"Request ${res['requested']:,.2f} · invoice {res['invoice_number']} ${res['invoiced']:,.2f} · "
+                    f"difference {'-' if res['invoiced'] < res['requested'] else '+'}"
+                    f"${abs(res['invoiced'] - res['requested']):,.2f}. It stays In billing batch, not Billed.")
 
             st.markdown("**3. Ask the assistant to explain**")
             provider = ui.ai_provider()
-            if demo.get("c_explained"):
-                st.caption(f"Answer from {provider.name if provider else 'the AI assistant'}, based only on the app's "
-                           "calculated figures")
-                st.markdown(ui.esc(demo["c_explained"]))
-            elif provider is None:
-                st.caption("The AI assistant is not configured in this copy, so here is the rule-based explanation:")
-                st.markdown(ui.esc(
-                    f"The billing system invoiced {res['target']} for ${res['invoiced']:,.2f}, but the request was "
-                    f"for ${res['requested']:,.2f}. The two amounts use the same digits in a different order, which "
-                    "usually means a keying error. Because they do not match, the request is held instead of being "
-                    "marked billed. Next step: ask the billing system team to reissue the invoice for the requested "
-                    "amount, then record the corrected invoice."))
-            elif st.button("Explain this exception", key="c_explain", icon=":material/forum:"):
-                wait = guard.check_rate(st.session_state)
-                if wait:
-                    st.warning(wait)
+            rule_text = (
+                f"The billing system invoiced {res['target']} for ${res['invoiced']:,.2f}, but the request was "
+                f"for ${res['requested']:,.2f}. The two amounts use the same digits in a different order, which "
+                "usually means a keying error. Because they do not match, the request is held instead of being "
+                "marked billed. Next step: ask the billing system team to reissue the invoice for the requested "
+                "amount, then record the corrected invoice.")
+            def show_explanation(explained):
+                if isinstance(explained, dict):
+                    st.caption("AI explanation, based only on the app's calculated figures")
+                    ui.render_answer(explained, key="c_explain", follow_ups=False)
                 else:
-                    q = ai_context.explain_exception_question(res["target"])
-                    system = ai_context.system_prompt(ui.metrics(), conn, customers, ui.now(), "Billing Quality")
-                    try:
-                        with st.container(border=True):
-                            st.caption(f"Answer from {provider.name}, based only on the app's calculated figures")
-                            text = st.write_stream(guard.limit_stream(
-                                provider.stream(system, [{"role": "user", "content": q}])))
-                        demo["c_explained"] = text if isinstance(text, str) else "".join(map(str, text))
-                    except AIError as e:
-                        st.warning(ui.esc(e))
+                    st.caption("Explanation from the reconciliation rule:")
+                    st.markdown(ui.esc(explained))
+
+            if demo.get("c_explained"):
+                with st.container(border=True):
+                    show_explanation(demo["c_explained"])
+            elif provider is None:
+                with st.container(border=True):
+                    show_explanation(rule_text)
+            elif st.button("Explain this exception", key="c_explain", icon=":material/forum:"):
+                q = ai_context.explain_exception_question(res["target"])
+                system = ai_context.system_prompt(ui.metrics(), conn, customers, ui.now(), "Billing Quality")
+                try:
+                    with st.spinner("Reading the reconciliation..."):
+                        demo["c_explained"] = ui.ai_answer(system, [{"role": "user", "content": q}])
+                except AIError:
+                    demo["c_explained"] = rule_text
+                st.rerun()
 
             st.markdown("**4. Record the corrected invoice**")
             if not demo.get("c_resolved"):

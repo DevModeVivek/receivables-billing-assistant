@@ -30,7 +30,7 @@ def test_assistant_gets_verified_reporting_and_workflow_context(frames, workspac
     prompt = ai_context.system_prompt(m, workspace, sample_data.customer_lookup(), NOW, "Collections")
     assert "as of 30 Sep 2026" in prompt and "filters: All regions and categories" in prompt
     assert f"Total billed: ${m.billed:,.0f}" in prompt
-    assert "Third-Party Damage Recovery: $4,924,926 across" in prompt
+    assert "Third-Party Damage Recovery: $4,924,926 ($4.92M) across" in prompt
     assert "WORKFLOW SUMMARY" in prompt and "Requests by status:" in prompt
     for principle in ai_context.PRINCIPLES:
         assert principle in prompt
@@ -84,8 +84,8 @@ def _gemini_with(models):
 
 
 @pytest.mark.parametrize("exc, phrase", [
-    (RuntimeError("429 RESOURCE_EXHAUSTED quota exceeded for key AIzaSECRET"), "quota"),
-    (RuntimeError("403 PERMISSION_DENIED API key not valid AIzaSECRET"), "not accepted"),
+    (RuntimeError("429 RESOURCE_EXHAUSTED quota exceeded for key AIzaSECRET"), "busy"),
+    (RuntimeError("403 PERMISSION_DENIED API key not valid AIzaSECRET"), "unavailable"),
     (RuntimeError("something odd AIzaSECRET"), "could not answer"),
 ])
 def test_provider_failures_are_reported_honestly(exc, phrase):
@@ -98,15 +98,14 @@ def test_provider_failures_are_reported_honestly(exc, phrase):
         g.json("system", "text", ["a"])
 
 
-def test_gemini_stream_passes_system_prompt_and_history():
+def test_gemini_passes_system_prompt_and_history():
     pytest.importorskip("google.genai")
     seen = {}
 
     class Models:
-        def generate_content_stream(self, model, contents, config):
+        def generate_content(self, model, contents, config):
             seen.update(model=model, contents=contents, system=config.system_instruction)
-            yield SimpleNamespace(text="Answer ")
-            yield SimpleNamespace(text="text")
+            return SimpleNamespace(text="Answer text", candidates=[])
 
     g = _gemini_with(Models())
     out = "".join(g.stream("RULES", [{"role": "user", "content": "q1"}, {"role": "assistant", "content": "a1"},
@@ -160,3 +159,83 @@ def test_upload_limits():
     from workflow import rules
     mapped = exports.match_columns(df, rules.FIELD_LABELS)
     assert list(mapped.columns) == ["customer_account", "total_amount"]
+
+
+class _Flaky(providers.Provider):
+    """Fails a set number of times, then answers. Records which model each attempt used."""
+    def __init__(self, failures, error="The assistant could not answer this time.", backup=True):
+        self.failures, self.error, self.models = failures, error, []
+        self.model, self.backup = "main", ("backup" if backup else None)
+
+    def candidates(self):
+        return [self.model] + ([self.backup] if self.backup else [])
+
+    def stream(self, system, messages, model=None):
+        self.models.append(model)
+        if len(self.models) <= self.failures:
+            yield "partial "
+            raise providers.AIError(self.error)
+        yield "Full answer."
+
+    def structured(self, system, messages, schema, model=None):
+        return {"text": "".join(self.stream(system, messages, model))}
+
+
+def test_brief_failures_are_retried_quietly(monkeypatch):
+    monkeypatch.setattr(providers, "RETRY_DELAYS", (0, 0))
+    p = _Flaky(failures=2)
+    assert providers.answer(p, "s", [{"role": "user", "content": "q"}]) == "Full answer."  # no partial text
+    assert p.models == ["main", "main", "backup"]
+
+
+def test_quota_errors_switch_to_the_backup_model(monkeypatch):
+    monkeypatch.setattr(providers, "RETRY_DELAYS", (0, 0))
+    p = _Flaky(failures=1, error="The assistant is busy right now. Please try again in a minute.")
+    assert providers.structured(p, "s", [{"role": "user", "content": "q"}], {}) == {"text": "Full answer."}
+    assert p.models == ["main", "backup"]
+
+
+def test_retries_stop_on_key_problems_and_give_up_cleanly(monkeypatch):
+    monkeypatch.setattr(providers, "RETRY_DELAYS", (0, 0))
+    p = _Flaky(failures=9, error="The assistant is unavailable at the moment.")
+    with pytest.raises(providers.AIError):
+        providers.answer(p, "s", [{"role": "user", "content": "q"}])
+    assert len(p.models) == 1
+    p = _Flaky(failures=9)
+    with pytest.raises(providers.AIError):
+        providers.answer(p, "s", [{"role": "user", "content": "q"}])
+    assert len(p.models) == 3
+
+
+def test_figure_check_accepts_app_figures_and_flags_others(frames, workspace):
+    from ai import answer as fmt
+    m = rc.compute(frames)
+    context = ai_context.system_prompt(m, workspace, sample_data.customer_lookup(), NOW)
+    good = (f"Overdue is {rc.money(m.overdue_amt)} (${m.overdue_amt:,.0f}); collection rate {m.collection_rate:.1%}; "
+            f"{m.over_90 / m.outstanding:.0%} is over 90 days; Clearwater Insurance owes $579K.")
+    assert fmt.unmatched(good, context) == []
+    assert fmt.unmatched("Overdue is $9.99M and 61% is late.", context) == ["$9.99M", "61%"]
+
+
+def test_answer_is_cleaned_to_the_fixed_format():
+    from ai import answer as fmt
+    data = fmt.clean({"answer": " Yes. ", "findings": ["a", "b", "c", "d", "e"], "next_steps": "Call them",
+                      "sources": ["Receivables report", "Made up"], "follow_ups": ["q1", "q2", "q3"], "extra": 1})
+    assert data == {"answer": "Yes.", "findings": ["a", "b", "c", "d"], "next_steps": ["Call them"], "draft": "",
+                    "sources": ["Receivables report"], "follow_ups": ["q1", "q2"]}
+    assert "What the data shows:" in fmt.to_markdown(data)
+
+
+def test_prompt_states_the_answer_format_and_ratios(frames, workspace):
+    m = rc.compute(frames)
+    prompt = ai_context.system_prompt(m, workspace, sample_data.customer_lookup(), NOW)
+    assert "Reply in JSON" in prompt and "Key ratios" in prompt
+    assert f"More than 90 days past due as a share of outstanding: {m.over_90 / m.outstanding:.0%}" in prompt
+    assert ".0 invoices" not in prompt
+
+
+def test_calculated_summary_uses_python_figures(frames, workspace):
+    m = rc.compute(frames)
+    text = ai_context.calculated_summary(m, workspace)
+    assert rc.money(m.billed) in text and f"{m.collection_rate:.1%}" in text and rc.money(m.overdue_amt) in text
+    assert "on hold for missing information" in text and "AI" not in text

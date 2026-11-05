@@ -15,8 +15,7 @@ reqs = pd.DataFrame(store.all_requests(conn))
 counts = reqs["status"].value_counts()
 cols = st.columns(len(rules.ALL_STATUSES))
 for col, s in zip(cols, rules.ALL_STATUSES):
-    col.markdown(f"<div class='kpi count-card' style='min-height:84px'><div class='kpi-label'>{s}</div>"
-                 f"<div class='kpi-value'>{int(counts.get(s, 0))}</div></div>", unsafe_allow_html=True)
+    ui.status_tile(col, s, int(counts.get(s, 0)))
 
 st.write("")
 f1, f2 = st.columns([2, 1])
@@ -29,23 +28,27 @@ if search:
                 .apply(lambda c: c.str.lower().str.contains(s, regex=False)).any(axis=1)]
 view["next_action"] = [store.next_action(r, now) for r in view.to_dict("records")]
 view = view.sort_values("received_at", ascending=False)
-table = view[["request_id", "received_at", "submitted_by_team", "customer_name", "billing_category", "total_amount",
-              "status", "next_action"]].rename(columns={
+table = view[["request_id", "status", "next_action", "customer_name", "total_amount", "billing_category",
+              "submitted_by_team", "received_at"]].rename(columns={
     "request_id": "Request", "received_at": "Received", "submitted_by_team": "Team", "customer_name": "Customer",
     "billing_category": "Category", "total_amount": "Amount", "status": "Status", "next_action": "Next action"})
 event = st.dataframe(table, hide_index=True, width="stretch", height=360, on_select="rerun", selection_mode="single-row",
-                     column_config={"Amount": st.column_config.NumberColumn(format="dollar")}, key="t_table")
+                     column_config={"Amount": st.column_config.NumberColumn(format="dollar"),
+                                    "Request": st.column_config.TextColumn(width="small"),
+                                    "Next action": st.column_config.TextColumn(width="medium")}, key="t_table")
 picked = event.selection.rows if event and event.selection else []
 options = view["request_id"].tolist()
-default = options[picked[0]] if picked else st.session_state.get("t_pick")
-rid = st.selectbox("Open a request (or click a row above)", [""] + options,
-                   index=(options.index(default) + 1) if default in options else 0, key="t_open")
+if picked and picked[0] < len(options) and options[picked[0]] != st.session_state.get("t_last_row"):
+    st.session_state["t_last_row"] = options[picked[0]]
+    st.session_state["t_open"] = options[picked[0]]  # a clicked row opens that request
+if st.session_state.get("t_open") not in [""] + options:
+    st.session_state["t_open"] = ""
+rid = st.selectbox("Open a request (or click a row above)", [""] + options, key="t_open")
 if not rid:
     st.caption("Select a request to see its checks, actions and history.")
     ui.ask_assistant("Workflow Tracker")
     ui.footer()
     st.stop()
-st.session_state["t_pick"] = rid
 
 req = store.get_request(conn, rid)
 findings = store.findings_for(conn, req, customers, now.date())
@@ -56,7 +59,7 @@ st.subheader(f"{rid} · {req.get('customer_name') or 'no customer name'}")
 st.markdown(f"Status {ui.badge(req['status'])} &nbsp; Checks {ui.badge(result)} &nbsp; "
             f"Next action: **{store.next_action(req, now)}**", unsafe_allow_html=True)
 if req.get("exception"):
-    st.error(ui.esc(f"Reconciliation exception: {req['exception']}"), icon=":material/error:")
+    ui.exception_card("Held at reconciliation", req["exception"])
 
 left, right = st.columns([1, 1])
 with left:

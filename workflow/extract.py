@@ -79,7 +79,9 @@ def extraction_prompt() -> str:
 
 
 def ai_extract(text: str, model) -> dict:
-    data = model.json(extraction_prompt(), wrap_untrusted("EMAIL", text[:MAX_EMAIL_CHARS]), list(rules.REQUEST_FIELDS))
+    from ai.providers import fields  # retried quietly on brief failures
+    data = fields(model, extraction_prompt(), wrap_untrusted("EMAIL", text[:MAX_EMAIL_CHARS]),
+                  list(rules.REQUEST_FIELDS))
     return {k: v for k, v in data.items() if k in rules.FIELD_LABELS and not rules.blank(v)}
 
 

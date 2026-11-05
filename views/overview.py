@@ -11,13 +11,17 @@ ui.header("Executive overview", "What has been billed, what has been collected, 
 
 c = st.columns(5)
 D = rc.DEFINITIONS
-ui.kpi(c[0], "Total billed", rc.money(m.billed), f"{len(m.inv):,} invoices", help_text=D["Total billed"])
+ui.kpi(c[0], "Total billed", rc.money(m.billed), f"{len(m.inv):,} invoices", help_text=D["Total billed"],
+       icon_name="receipt")
 ui.kpi(c[1], "Collection rate", f"{m.collection_rate:.1%}" if m.billed else "-", f"{rc.money(m.collected)} collected",
-       help_text=D["Collection rate"])
-ui.kpi(c[2], "Outstanding", rc.money(m.outstanding), f"{len(m.unpaid):,} unpaid invoices", help_text=D["Outstanding"])
+       help_text=D["Collection rate"], icon_name="trend", chip="good")
+ui.kpi(c[2], "Outstanding", rc.money(m.outstanding), f"{len(m.unpaid):,} unpaid invoices", help_text=D["Outstanding"],
+       icon_name="wallet")
 ui.kpi(c[3], "Overdue", rc.money(m.overdue_amt),
-       f"{m.overdue_amt / m.outstanding:.0%} of outstanding" if m.outstanding else "", "bad", help_text=D["Overdue"])
-ui.kpi(c[4], "Over 90 days", rc.money(m.over_90), f"{m.over_90_n:,} invoices", "bad", help_text=D["Over 90 days"])
+       f"{m.overdue_amt / m.outstanding:.0%} of outstanding" if m.outstanding else "", "bad", help_text=D["Overdue"],
+       icon_name="clock")
+ui.kpi(c[4], "Over 90 days", rc.money(m.over_90), f"{m.over_90_n:,} invoices", "bad", help_text=D["Over 90 days"],
+       icon_name="alert")
 
 if m.outstanding and len(m.by_category):
     ui.insight(f"<b>Key point:</b> {m.over_90 / m.outstanding:.0%} of the outstanding balance is more than 90 days "

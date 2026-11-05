@@ -12,7 +12,7 @@ from ai import providers  # noqa: E402
 APP = str(Path(__file__).resolve().parents[1] / "app.py")
 PAGES = ["views/home.py", "views/guided_demo.py", "views/overview.py", "views/billing_ops.py",
          "views/collections.py", "views/intake.py", "views/tracker.py", "views/quality.py", "views/assistant.py",
-         "views/insights.py", "views/business_case.py", "views/about.py"]
+         "views/insights.py"]
 
 
 @pytest.fixture(autouse=True)
@@ -45,7 +45,7 @@ def test_every_page_loads_without_ai():
         assert not at.exception, (page, [e.value for e in at.exception])
     at.switch_page("views/assistant.py")
     at.run()
-    assert any("not configured" in w.value for w in at.warning)
+    assert any("offline" in i.value for i in at.info)
 
 
 def test_filters_change_the_reports_and_persist_across_pages():
@@ -77,7 +77,7 @@ def test_guided_demo_from_a_fresh_session():
     click(at, "b_approve")
     click(at, "c_go")
     click(at, "c_recon_go")
-    assert any("not Billed" in e.value for e in at.error)
+    assert any("not Billed" in md.value for md in at.markdown)
     click(at, "c_fix")
     assert any("Done." in s.value for s in at.success)
 
@@ -121,3 +121,66 @@ def test_approval_needs_the_supervisor_role_in_the_tracker():
     at.run()
     click(at, f"t_appr_{rid}")
     assert conn.execute("SELECT status FROM requests WHERE request_id = ?", (rid,)).fetchone()[0] == "Ready to bill"
+
+
+class _AlwaysBusy(providers.Provider):
+    def stream(self, system, messages, model=None):
+        raise providers.AIError("The assistant is busy right now. Please try again in a minute.")
+        yield ""
+
+    def structured(self, system, messages, schema, model=None):
+        raise providers.AIError("The assistant is busy right now. Please try again in a minute.")
+
+
+class _Answers(providers.Provider):
+    """Answers in the fixed format. The first answer quotes a figure that is not in the app; the re-ask fixes it."""
+    def __init__(self):
+        self.calls = 0
+
+    def structured(self, system, messages, schema, model=None):
+        self.calls += 1
+        import re
+        overdue = re.search(r"Overdue: \$[\d,]+ \((\$[\d.]+M)\)", system).group(1)
+        wrong = self.calls == 1
+        return {"answer": f"Overdue receivables are {'$9.99M' if wrong else overdue}.",
+                "findings": ["Most of it is more than 90 days past due."], "next_steps": ["Call the largest accounts."],
+                "draft": "", "sources": ["Receivables report"], "follow_ups": ["Who owes the most?", "Why?"]}
+
+
+def test_ai_failure_shows_calculated_summary_not_an_error(monkeypatch):
+    monkeypatch.setattr(providers, "connect", lambda: _AlwaysBusy())
+    monkeypatch.setattr(providers, "RETRY_DELAYS", (0, 0))
+    at = start()
+    at.switch_page("views/assistant.py")
+    at.run()
+    click(at, "sugg0")
+    assert not at.error
+    assert any("calculated summary" in c.value for c in at.caption)
+    assert any("Billing request queue" in md.value for md in at.markdown)
+    at.switch_page("views/guided_demo.py")
+    at.run()
+    for key in ["a_go", "b_go", "b_draft_go", "b_sent"]:
+        click(at, key)
+    at.text_input(key="b_claim").input("CLM-20931")
+    at.checkbox(key="b_docs").check()
+    at.run()
+    for key in ["b_fix", "b_role", "b_approve", "c_go", "c_recon_go", "c_explain"]:
+        click(at, key)
+    assert any("reconciliation rule" in c.value for c in at.caption)
+    assert not [w for w in at.warning]
+
+
+def test_assistant_answer_is_structured_checked_and_re_asked(monkeypatch):
+    fake = _Answers()
+    monkeypatch.setattr(providers, "connect", lambda: fake)
+    import streamlit as st
+    st.cache_data.clear()
+    at = start()
+    at.switch_page("views/assistant.py")
+    at.run()
+    click(at, "sugg0")
+    page = " ".join(md.value for md in at.markdown)
+    assert fake.calls == 2 and "$9.99M" not in page  # the wrong figure was caught and the question re-asked
+    assert "What the data shows" in page and "Suggested next steps" in page
+    assert "match the app" in page and not at.error
+    assert [b for b in at.button if b.key and b.key.startswith("fu_")]  # follow-up questions offered

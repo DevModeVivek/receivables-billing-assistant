@@ -19,9 +19,10 @@ if ready.empty:
     st.caption("Nothing is ready to bill right now.")
 else:
     c = st.columns(3)
-    ui.kpi(c[0], "Requests ready", f"{len(ready)}")
-    ui.kpi(c[1], "Control total", f"${ready['total_amount'].sum():,.2f}", "Sum of the amounts in the batch")
-    ui.kpi(c[2], "Approved over limit", f"{ready['approved_by'].notna().sum()}", "Supervisor approval recorded")
+    ui.kpi(c[0], "Requests ready", f"{len(ready)}", icon_name="check", chip="good")
+    ui.kpi(c[1], "Control total", f"${ready['total_amount'].sum():,.2f}", "Sum of the amounts in the batch", icon_name="sigma")
+    ui.kpi(c[2], "Approved over limit", f"{ready['approved_by'].notna().sum()}", "Supervisor approval recorded",
+           icon_name="approve", chip="warn")
     st.dataframe(ready.rename(columns={"request_id": "Request", "customer_name": "Customer",
                                        "billing_category": "Category", "total_amount": "Amount",
                                        "approved_by": "Approved by"}),
@@ -49,14 +50,13 @@ batch_id = st.selectbox("Batch", all_batches, index=all_batches.index(default) i
                         key="q_pick")
 upload = store.batch_file(conn, batch_id)
 row = batches.set_index("batch_id").loc[batch_id]
-st.markdown(f"**{batch_id}**: {int(row.request_count)} requests, control total ${row.control_total:,.2f}, "
-            f"file total ${upload['Amount'].sum():,.2f} "
-            + ("(matches)" if abs(upload['Amount'].sum() - row.control_total) < 0.01 else "(DOES NOT MATCH)"))
+st.markdown(ui.esc(f"**{batch_id}**: {int(row.request_count)} requests, control total ${row.control_total:,.2f}, "
+                   f"file total ${upload['Amount'].sum():,.2f} "
+                   + ("(matches)" if abs(upload['Amount'].sum() - row.control_total) < 0.01 else "(DOES NOT MATCH)")))
 d1, d2, _ = st.columns([1, 1, 3])
 d1.download_button("Billing file (CSV)", exports.to_csv_bytes(upload), f"{batch_id}.csv", "text/csv", key="q_csv")
 d2.download_button("Billing file (Excel)", exports.to_excel_bytes(upload, "Upload"), f"{batch_id}.xlsx", key="q_xlsx")
-st.caption("Exports are protected against spreadsheet formula injection. The layout is illustrative; no real billing "
-           "system (such as SAP) is connected.")
+st.caption("Illustrative upload layout; no billing system is connected. Exports are safe to open in Excel.")
 
 st.subheader("3. Reconcile with the billing system")
 if batch_id not in open_batches and not store.table(

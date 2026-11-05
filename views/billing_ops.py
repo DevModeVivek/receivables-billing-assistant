@@ -11,18 +11,20 @@ ui.header("Billing operations", "How quickly completed work is invoiced, and whe
 
 D = rc.DEFINITIONS
 c = st.columns(5)
-ui.kpi(c[0], "Avg days to invoice", f"{m.cycle:.1f}", "From completed work", help_text=D["Avg days to invoice"])
+ui.kpi(c[0], "Avg days to invoice", f"{m.cycle:.1f}", "From completed work", help_text=D["Avg days to invoice"],
+       icon_name="clock")
 ui.kpi(c[1], "Unbilled backlog", rc.money(m.unbilled), f"{len(m.pending):,} requests not yet invoiced",
-       help_text=D["Unbilled backlog"])
+       help_text=D["Unbilled backlog"], icon_name="file", chip="warn")
 ui.kpi(c[2], "Dispute rate", f"{m.dispute_rate:.1%}", f"{(m.inv['Status'] == 'Disputed').sum():,} disputed invoices",
-       help_text=D["Dispute rate"])
+       help_text=D["Dispute rate"], icon_name="scale")
 ui.kpi(c[3], "Written off", rc.money(m.write_offs), f"{(m.inv['Status'] == 'Written Off').sum():,} invoices",
-       help_text=D["Written off"])
+       help_text=D["Written off"], icon_name="ban", chip="bad")
 if m.refund_recent == m.refund_recent and m.refund_before == m.refund_before:  # both not NaN
     ui.kpi(c[4], "Refund turnaround", f"{m.refund_recent:.0f} days",
-           f"Was {m.refund_before:.0f} days in {rc.EARLIER_REFUNDS_LABEL}", "good", help_text=D["Refund turnaround"])
+           f"Was {m.refund_before:.0f} days in {rc.EARLIER_REFUNDS_LABEL}", "good", help_text=D["Refund turnaround"],
+           icon_name="refund")
 else:
-    ui.kpi(c[4], "Refund turnaround", "-", "No refunds for this selection")
+    ui.kpi(c[4], "Refund turnaround", "-", "No refunds for this selection", icon_name="refund")
 
 cyc = m.cycle_by_cat
 if len(cyc) > 1:

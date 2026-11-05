@@ -280,7 +280,9 @@ def confirm_batch(conn, batch_id, recon: pd.DataFrame, user, now) -> dict:
                          "WHERE request_id = ?", (str(r.invoice_number), ts(now), r.request_id))
             log(conn, now, user, r.request_id, "Billed", f"Invoice {r.invoice_number}")
         elif r.result in ("Amount differs", "No invoice found") and r.status == "In billing batch":
-            note = (f"Invoice {r.invoice_number} is ${r.invoice_amount:,.2f}, request is ${r.total_amount:,.2f}"
+            diff = r.invoice_amount - r.total_amount
+            note = (f"Invoice {r.invoice_number} is ${r.invoice_amount:,.2f}, request is ${r.total_amount:,.2f} "
+                    f"(difference {'-' if diff < 0 else '+'}${abs(diff):,.2f})"
                     if r.result == "Amount differs" else "No invoice in the billing system confirmation")
             conn.execute("UPDATE requests SET exception = ? WHERE request_id = ?", (note, r.request_id))
             log(conn, now, user, r.request_id, "Reconciliation exception", note)

@@ -136,20 +136,17 @@ with tab_email:
         st.session_state["e_text"] = sample_data.sample_email(sample, today)
         st.session_state["e_loaded"] = sample
     text = st.text_area("Paste the email", key="e_text", height=260, max_chars=MAX_EMAIL_CHARS)
-    if provider is None:
-        st.caption("Standard-template emails are read by a plain parser. Free-text emails need the AI assistant, "
-                   "which is not configured here, so fill any gaps by hand.")
-    else:
-        st.caption(f"Standard-template emails are read by a plain parser. Free-text emails are read by {provider.name}; "
-                   "every value it returns is checked against the email text.")
+    st.caption("Template emails are read directly. Free-text emails are read by AI, and every value is checked "
+               "against the email." if provider else "Template emails are read directly. Fill any gaps by hand.")
     if st.button("Read email", key="e_read", disabled=not text.strip()):
         try:
             fields, source = extract.read_email(text, provider)
             st.session_state["e_fields"] = (fields, source)
-        except AIError as e:
+        except AIError:
             fields, source = extract.read_email(text, None)
             st.session_state["e_fields"] = (fields, source)
-            st.warning(ui.esc(f"{e} The template parser was used instead."))
+            st.info("The AI is busy right now, so the template reader was used. Fill any gaps by hand.",
+                    icon=":material/info:")
     if st.session_state.get("e_fields"):
         fields, source = st.session_state["e_fields"]
         table = pd.DataFrame([{"Field": rules.FIELD_LABELS[f], "Value": "" if fields.get(f) is None else str(fields.get(f)),
